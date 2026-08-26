@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"src/**/*.test.ts\"",
-    "serve": "python3 -m http.server 8144 --directory dist"
+    "serve": "python3 -m http.server 8144 --directory dist",
+    "sweep": "node --experimental-strip-types scripts/sweep.ts"
   },
   "dependencies": {
     "three": "^0.170.0"
