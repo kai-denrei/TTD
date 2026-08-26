@@ -120,6 +120,36 @@ test('C4 ram — high damage kills on contact (seed 3, damage=20)', () => {
     'high damage should kill on contact; no kills means hitCritter path broken');
 });
 
+// C-1 regression: parked tank contact radius must be speed-invariant.
+// Before the fix, the swept-floor used tuning.get('tank.speed') * dt as the radius
+// even when forward=0, so a high-speed parked tank got an inflated disc and accumulated
+// contacts without moving. The fix measures actual displacement (always 0 when parked),
+// so kill counts must be equal regardless of tank.speed setting.
+// Seed 3 is the pass-through seed: critters walk through the spawn cell.
+test('C-1: parked tank contacts are speed-invariant (forward=0 gets no swept radius)', () => {
+  const run = (speed: number, dt: number) => {
+    const t = makeTuning();
+    t.set('tank.speed', speed);
+    t.set('tank.damage', 20); // one-shot so kills are countable
+    t.set('wave.size', 20); t.set('wave.dripRate', 0.05); t.set('enemy.speed', 1.0);
+    const w = makeWorld({ seed: 3, tuning: t });
+    // Parked tank — forward=0 means no movement, no displacement, no swept radius
+    const steps = Math.round(3000 * (1 / 60) / dt);
+    for (let i = 0; i < steps; i++) w.tick(dt, { forward: 0, turn: 0, fire: false });
+    return w.telemetry.data.killsByPlayer;
+  };
+  // Same dt, different speeds — must be equal
+  const killsMinSpeed = run(0.5, 1 / 60);  // tank.speed min
+  const killsMaxSpeed = run(10, 1 / 60);   // tank.speed max
+  assert.equal(killsMinSpeed, killsMaxSpeed,
+    `parked tank speed-invariance broken: kills at speed=0.5: ${killsMinSpeed}, at speed=10: ${killsMaxSpeed}`);
+  // Same speed, different dt — must be equal (radius should not vary with dt when parked)
+  const kills60fps = run(10, 1 / 60);
+  const kills30fps = run(10, 1 / 30);
+  assert.equal(kills60fps, kills30fps,
+    `parked tank dt-invariance broken: kills at dt=1/60: ${kills60fps}, at dt=1/30: ${kills30fps}`);
+});
+
 // Guard for NEW-3 — contact latch (TANK_CONTACT_COOLDOWN).
 // Before the latch, tankHits was a per-tick sample: a critter with low damage survives
 // many ticks inside the radius and each tick counted as a hit, so lower tank.damage

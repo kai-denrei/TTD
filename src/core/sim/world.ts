@@ -107,6 +107,9 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   //     so 0.027 keeps spawned critters outside the contact zone.
   //   - A critter must travel ~0.4 of a cell before it can trigger a ram hit,
   //     which prevents spawn-adjacent auto-kills regardless of seed.
+  //   - In step 7d the floor is extended by half the actual displacement moved
+  //     this tick (measured from tankPrev), so a moving tank does not tunnel
+  //     through critters. A parked tank (forward=0) gets no extension.
   //   - Contact damage fires at most once per TANK_CONTACT_COOLDOWN seconds per
   //     critter (see step 7d), so a single pass registers exactly one event
   //     regardless of how long the critter spends inside the radius.
@@ -219,6 +222,8 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     const towerEvents = stepTowers(towers, critters, dt, tuning);
 
     // ── 6. Tank tick → collect damage events ─────────────────────────────────
+    // Capture position before stepTank so we can measure actual displacement below.
+    const tankPrev: [number, number, number] = [tank.pos[0]!, tank.pos[1]!, tank.pos[2]!];
     const { events: tankEvents, acting: tankActing } = stepTank(tank, dt, input, critters, tuning);
 
     // ── 7. Resolve damage ────────────────────────────────────────────────────
@@ -264,12 +269,15 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     }
 
     // 7d. Contact damage to tank (critters that reach the tank's position)
-    // Swept-motion floor: the point test below samples once per tick, but the tank
-    // translates tank.speed*dt in that time. Without this floor a fast tank tunnels
-    // straight through critters — at tank.speed 10 the step is 6x the static radius
-    // and 100% of contacts were missed. Half the step keeps the sampled disc
-    // overlapping between consecutive ticks.
-    const r = Math.max(tankContactRadius, 0.5 * tuning.get('tank.speed') * dt);
+    // Swept-motion floor: the point test below samples once per tick. Without the
+    // floor a fast tank tunnels through critters — the step can exceed the static
+    // radius entirely and 100% of contacts are missed. We use the actual displacement
+    // measured since tankPrev (not the speed lever) so a parked tank (forward=0) never
+    // gets an inflated disc regardless of the speed setting.
+    const mdx = tank.pos[0]! - tankPrev[0]!;
+    const mdy = tank.pos[1]! - tankPrev[1]!;
+    const mdz = tank.pos[2]! - tankPrev[2]!;
+    const r = Math.max(tankContactRadius, 0.5 * Math.sqrt(mdx * mdx + mdy * mdy + mdz * mdz));
     for (const c of critters) {
       if (!c.alive) continue;
       // Contact latch: only register a new ram event when the cooldown has expired.
