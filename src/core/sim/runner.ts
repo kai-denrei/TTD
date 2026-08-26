@@ -17,6 +17,7 @@
 
 import { makeWorld } from './world.ts';
 import { makeTuning } from '../tuning/store.ts';
+import { nearestFrontierWall } from '../sphere/dungeon.ts';
 import type { TankInput } from './tank.ts';
 
 export type RunInput = 'idle' | 'patrol';
@@ -32,6 +33,7 @@ export type RunSpec = {
   /** Stop the moment the heart dies. Default true — see the note above. */
   stopAtDeath?: boolean;
   input?: RunInput;
+  /** 'heart' = the frontier wall nearest the heart (towers need high ground). */
   towers?: RunTowers;
 };
 
@@ -63,7 +65,12 @@ export function runHeadless(spec: RunSpec): RunResult {
 
   const towers = spec.towers ?? 'heart';
   if (towers === 'heart') {
-    world.placeTower(world.dungeon.heart);
+    // 'heart' now means "the high ground nearest the heart" — towers cannot
+    // stand on open floor (see world.placeTower). The name still describes the
+    // intent, defend the heart; renaming it would churn the sweep script, the
+    // compare worker and their tests for nothing.
+    const cell = nearestFrontierWall(world.mesh, world.dungeon, world.dungeon.heart);
+    if (cell !== -1) world.placeTower(cell);
   } else if (towers !== 'none') {
     for (const cell of towers) world.placeTower(cell);
   }

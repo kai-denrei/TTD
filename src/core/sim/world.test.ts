@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeTuning } from '../tuning/store.ts';
-import { BLOCKED } from '../sphere/dungeon.ts';
+import { BLOCKED, nearestFrontierWall } from '../sphere/dungeon.ts';
 import { makeWorld } from './world.ts';
 import type { World } from './world.ts';
 
@@ -29,7 +29,8 @@ test('towers kill critters and it is attributed to the tower', () => {
   const t = makeTuning();
   t.set('tower.damage', 100); t.set('tower.range', 0.5); t.set('tower.rate', 10); t.set('enemy.speed', 2);
   const w = makeWorld({ seed: 1, tuning: t });
-  w.placeTower(w.dungeon.spawn);
+  // Towers need high ground; the spawn cell itself is open floor.
+  w.placeTower(nearestFrontierWall(w.mesh, w.dungeon, w.dungeon.spawn));
   scripted(w, 3000);
   assert.ok(w.telemetry.data.killsByTower > 0, 'tower never killed anything');
 });
@@ -47,21 +48,22 @@ test('god mode prevents heart death but still counts leaks (I6 fix)', () => {
   assert.equal(w.heartHp, hp0, 'heart lost hp despite god mode');
 });
 
-test('placeTower rejects blocked cells and counts decisions', () => {
+// Renamed and inverted in M0c-1: the rule is now high-ground-only, so a test
+// named "rejects blocked cells" would assert the opposite of the design.
+test('placeTower rejects open cells and counts only successful placements', () => {
   const w = makeWorld({ seed: 3, tuning: makeTuning() });
-  const blocked = w.dungeon.tags.findIndex((x) => x === BLOCKED);
-  assert.equal(w.placeTower(blocked), false);
-  const open = w.dungeon.heart;
-  assert.equal(w.placeTower(open), true);
+  assert.equal(w.placeTower(w.dungeon.heart), false, 'open floor is not high ground');
+  const wall = nearestFrontierWall(w.mesh, w.dungeon, w.dungeon.heart);
+  assert.equal(w.placeTower(wall), true);
   assert.equal(w.telemetry.data.decisionsThisPhase, 1, 'a rejected placement must not count');
   assert.equal(w.telemetry.data.decisionsTotal, 1, 'decisionsTotal must match successful placements');
 });
 
 test('I10: placeTower enforces one tower per cell (occupancy)', () => {
   const w = makeWorld({ seed: 3, tuning: makeTuning() });
-  const open = w.dungeon.heart;
-  assert.equal(w.placeTower(open), true, 'first tower should succeed');
-  assert.equal(w.placeTower(open), false, 'second tower on same cell must be rejected');
+  const cell = nearestFrontierWall(w.mesh, w.dungeon, w.dungeon.heart);
+  assert.equal(w.placeTower(cell), true, 'first tower should succeed');
+  assert.equal(w.placeTower(cell), false, 'second tower on same cell must be rejected');
   assert.equal(w.telemetry.data.decisionsTotal, 1, 'only one successful placement = one decision');
 });
 
@@ -276,4 +278,30 @@ test('NEW-A: heartDeathAt is stamped when heart reaches 0 HP', () => {
     assert.ok((s['heartDeathAt'] ?? 0) > 0, 'heartDeathAt should be > 0 when survived=0');
     assert.equal(w.heartDied, true, 'world.heartDied must be true');
   }
+});
+
+// --- tower placement: high ground only -------------------------------------
+// Reverts the M0b closeout's spec edit. Towers build on walls, never on open
+// floor: walls carry no enemy pathing, so a tower on one can never dam a lane.
+
+test('placement accepts a frontier wall cell', () => {
+  const w = makeWorld({ seed: 42, tuning: makeTuning() });
+  const cell = nearestFrontierWall(w.mesh, w.dungeon, w.dungeon.heart);
+  assert.equal(w.placeTower(cell), true);
+});
+
+test('placement REFUSES an open cell — towers build on high ground', () => {
+  const w = makeWorld({ seed: 42, tuning: makeTuning() });
+  assert.equal(w.placeTower(w.dungeon.heart), false, 'the heart is open ground');
+  assert.equal(w.towers.length, 0);
+});
+
+test('placement refuses a buried wall cell — it overlooks nothing', () => {
+  const w = makeWorld({ seed: 42, tuning: makeTuning() });
+  const buried = w.mesh.quads.findIndex(
+    (_q, i) => w.dungeon.tags[i] === BLOCKED
+      && (w.mesh.adj[i] ?? []).every((n) => w.dungeon.tags[n] === BLOCKED),
+  );
+  assert.ok(buried >= 0, 'fixture has no buried wall');
+  assert.equal(w.placeTower(buried), false);
 });

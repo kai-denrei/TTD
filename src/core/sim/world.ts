@@ -28,7 +28,7 @@
 import type { SphereMesh } from '../sphere/grid.ts';
 import { generateSphereMesh } from '../sphere/grid.ts';
 import type { Dungeon } from '../sphere/dungeon.ts';
-import { generateDungeon, BLOCKED } from '../sphere/dungeon.ts';
+import { generateDungeon, BLOCKED, isFrontierWall } from '../sphere/dungeon.ts';
 import type { TuningStore } from '../tuning/store.ts';
 import { makeTelemetry } from './telemetry.ts';
 import type { Rng } from './rng.ts';
@@ -64,12 +64,9 @@ export type World = {
    *  Exposed so tests can assert directly rather than inferring from kill counts. */
   tankContactRadius: number;
   tick(dt: number, input: TankInput): void;
-  /** Place a tower on an open (non-BLOCKED) cell. Returns false if the cell is BLOCKED or already occupied.
-   *  One tower per cell is enforced. Counts a decision only on success.
-   *  Open cells only. Spec §7 originally said "wall cells"; that was the spec's
-   *  error and it is corrected there — a tower on a BLOCKED cell is unreachable
-   *  by the nav graph and unpickable by the raycast, so it could neither shoot
-   *  nor be placed. */
+  /** Place a tower on HIGH GROUND: a BLOCKED cell bordering open ground.
+   *  Returns false for open cells, buried walls, and occupied cells.
+   *  One tower per cell; counts a decision only on success. */
   placeTower(cell: number): boolean;
   setMacro(on: boolean): void;
 };
@@ -337,14 +334,22 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
 
   // ---- placeTower -----------------------------------------------------------
 
+  // Towers build on the HIGH GROUND only: a BLOCKED cell that borders open
+  // ground. From the PoC (td-tab.js:2966): "towers build on the HIGH GROUND
+  // only... No connectivity guard needed: walls never carry enemy pathing, so a
+  // tower can never dam a lane." That last clause is why this rule exists —
+  // allowing open cells would let a player seal a route and would force a
+  // connectivity check on every placement.
+  //
+  // M0b briefly allowed open cells instead. That was a mistake: it "corrected"
+  // spec §7 to match an implementation that had not yet built walls, rather
+  // than to match the design.
   function placeTower(cell: number): boolean {
-    // Reject if cell is BLOCKED
-    if (dungeon.tags[cell] === BLOCKED) return false;
+    if (!isFrontierWall(mesh, dungeon, cell)) return false;
 
     // One tower per cell — stacking bypasses the decision budget
     if (towers.some((t) => t.cell === cell)) return false;
 
-    // Get cell position
     const pos: Vec3 = mesh.centers[cell] ?? [0, 1, 0];
     const tower = makeTower(nextTowerId++, cell, pos);
     towers.push(tower);

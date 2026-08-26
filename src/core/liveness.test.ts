@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { makeTuning } from './tuning/store.ts';
 import { makeWorld } from './sim/world.ts';
 import { LEVERS } from './tuning/schema.ts';
+import { nearestFrontierWall } from './sphere/dungeon.ts';
 
 // Render-only levers: they cannot move sim telemetry by design, so the
 // diff-the-telemetry gate below cannot judge them. They are NOT untested —
@@ -59,8 +60,8 @@ function runWith(overrides: Record<string, number>, seed = 42, ticks = 3000): Re
   const t = makeTuning();
   for (const [k, v] of Object.entries(overrides)) t.set(k, v);
   const w = makeWorld({ seed, tuning: t });
-  // Place tower on a non-blocked cell near heart (heart cell is open)
-  w.placeTower(w.dungeon.heart);
+  // Towers stand on high ground only; the heart itself is open floor.
+  w.placeTower(nearestFrontierWall(w.mesh, w.dungeon, w.dungeon.heart));
   for (let i = 0; i < ticks; i++) {
     w.tick(1 / 60, { forward: (i % 120) < 60 ? 1 : -1, turn: Math.sin(i / 30), fire: i % 5 === 0 });
   }
