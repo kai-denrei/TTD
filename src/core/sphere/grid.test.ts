@@ -9,6 +9,65 @@ test('every face is a quad', () => {
   for (const q of MESH.quads) assert.equal(q.length, 4, 'non-quad face');
 });
 
+// --- topology -------------------------------------------------------------
+// The strongest guarantees we have that the hull -> merge -> subdivide -> dual
+// chain produced a valid closed surface. A hole, a duplicated face or a
+// non-manifold edge would sail past every geometric check above and then
+// silently poison pathfinding, collision and everything built on the graph.
+
+/** Undirected edge key, orientation-independent. */
+const edgeKey = (a: number, b: number) => (a < b ? `${a}:${b}` : `${b}:${a}`);
+
+function edgeUse(mesh: typeof MESH): Map<string, number> {
+  const uses = new Map<string, number>();
+  for (const q of mesh.quads) {
+    for (let i = 0; i < q.length; i++) {
+      const a = q[i]!;
+      const b = q[(i + 1) % q.length]!;
+      const k = edgeKey(a, b);
+      uses.set(k, (uses.get(k) ?? 0) + 1);
+    }
+  }
+  return uses;
+}
+
+test('the mesh is closed and manifold — every edge joins exactly 2 faces', () => {
+  const uses = edgeUse(MESH);
+  const boundary = [...uses.entries()].filter(([, n]) => n === 1);
+  const nonManifold = [...uses.entries()].filter(([, n]) => n > 2);
+  assert.equal(boundary.length, 0, `${boundary.length} boundary edges — the surface has a hole`);
+  assert.equal(nonManifold.length, 0, `${nonManifold.length} edges shared by >2 faces — non-manifold`);
+});
+
+test('Euler characteristic V - E + F = 2 (a sphere, genus 0)', () => {
+  const V = MESH.verts.length;
+  const E = edgeUse(MESH).size;
+  const F = MESH.quads.length;
+  assert.equal(V - E + F, 2, `V=${V} E=${E} F=${F} gives chi=${V - E + F}, expected 2`);
+});
+
+test('a closed quad mesh satisfies E = 2F', () => {
+  // Follows from every face having 4 edges and every edge being shared twice.
+  // Stated separately because it localises WHICH assumption broke if chi != 2.
+  assert.equal(edgeUse(MESH).size, 2 * MESH.quads.length);
+});
+
+test('no quad repeats a vertex (no degenerate faces)', () => {
+  MESH.quads.forEach((q, i) => {
+    assert.equal(new Set(q).size, q.length, `quad ${i} reuses a vertex: ${q}`);
+  });
+});
+
+test('topology holds across several seeds and densities', () => {
+  for (const [seed, points] of [[3, 300], [11, 500], [19, 800]] as const) {
+    const m = generateSphereMesh({ seed, points, relaxIters: 20 });
+    const V = m.verts.length;
+    const E = edgeUse(m).size;
+    const F = m.quads.length;
+    assert.equal(V - E + F, 2, `seed=${seed} points=${points}: chi=${V - E + F}`);
+  }
+});
+
 test('all vertices are on the unit sphere', () => {
   for (const v of MESH.verts) {
     const r = Math.hypot(v[0], v[1], v[2]);
