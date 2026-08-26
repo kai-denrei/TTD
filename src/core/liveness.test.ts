@@ -45,6 +45,21 @@ const COMPANION_OVERRIDES: Record<string, Record<string, number>> = {
   // the upper half is testable: mid(~10) chips, max(20) one-shots — telemetry differs.
   'tower.damage': { 'enemy.hp': 20 },
   'tank.damage':  { 'enemy.hp': 20 },
+  // M0c-1: tower.rate is inert in its UPPER half at default damage. A kill
+  // needs two hits on one critter (tower.damage 3 vs enemy.hp 5), and above
+  // ~2 s between shots the critter has left range before the second — so the
+  // tower kills NOTHING and every slow rate is indistinguishable from every
+  // other (measured: rate 2.6 and 5.0 both give towerKillShare 0.000 and
+  // byte-identical telemetry). tower.damage=20 one-shots a default critter,
+  // which makes rate control kill throughput directly: 10 kills at 2.6 s
+  // against 8 at 5.0 s.
+  //
+  // This guard passed before M0c-1 only incidentally. Fixing the tank's turn
+  // inversion changed its path, hence which critters it killed, hence the
+  // shared critter RNG stream — the comparability hazard M0a's brain notes §2
+  // documents. The lever's upper half was always this marginal; the shift
+  // merely stopped hiding it.
+  'tower.rate':   { 'tower.damage': 20 },
 };
 
 // NEW-B: Levers that legitimately saturate before their declared max.

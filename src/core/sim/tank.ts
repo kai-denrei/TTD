@@ -73,7 +73,12 @@ export function stepTank(
   // ── Turn: rotate heading around surface normal (pos for unit sphere) ───────
   if (input.turn !== 0) {
     const normal: Vec3 = normalize(tank.pos); // surface normal = pos on unit sphere
-    const turnAmount = input.turn * Math.PI * dt; // radians
+    // NEGATED: a positive rotation about an OUTWARD normal is counter-clockwise
+    // seen from outside — a LEFT turn. Without the sign, pressing right steers
+    // left, which is what M0b shipped. Pinned by a numeric case in
+    // tank.test.ts rather than by an argument about winding, since an argument
+    // about winding is what produced the bug.
+    const turnAmount = -input.turn * Math.PI * dt; // radians
     // Rodrigues rotation of heading around normal
     tank.heading = rodriguezRotate(tank.heading, normal, turnAmount);
   }
@@ -125,7 +130,10 @@ export function stepTank(
     }
   }
 
-  const acting = Math.abs(input.forward) > 0 || input.fire;
+  // Turning counts. A tank pivoting to bring its guns to bear while enemies are
+  // alive is not idle, and tankIdleUnderThreat is the metric vision §8 names for
+  // spotting a tank with nothing to do — it must not lie in that direction.
+  const acting = Math.abs(input.forward) > 0 || Math.abs(input.turn) > 0 || input.fire;
   return { events, acting };
 }
 
