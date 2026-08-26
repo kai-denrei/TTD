@@ -96,7 +96,7 @@ test('a headless run produces a non-degenerate session', () => {
 // Values measured after NEW-2 (radius floor) and NEW-3 (contact latch) landed.
 test('C4 ram — low damage chips but does not kill (seed 3, damage=0.5)', () => {
   const t = makeTuning();
-  t.set('tank.damage', 0.5);   // below enemy.hp (default 10) → contacts chip, nothing dies
+  t.set('tank.damage', 0.5);   // below enemy.hp (default 5) → contacts chip, nothing dies
   t.set('wave.size', 20); t.set('wave.dripRate', 0.05); t.set('enemy.speed', 1.0);
   const w = makeWorld({ seed: 3, tuning: t });
   // No tower; tank stays at spawn (stationary)
@@ -109,7 +109,7 @@ test('C4 ram — low damage chips but does not kill (seed 3, damage=0.5)', () =>
 
 test('C4 ram — high damage kills on contact (seed 3, damage=20)', () => {
   const t = makeTuning();
-  t.set('tank.damage', 20);    // above enemy.hp (default 10) → one-shot on contact
+  t.set('tank.damage', 20);    // above enemy.hp (default 5) → one-shot on contact
   t.set('wave.size', 20); t.set('wave.dripRate', 0.05); t.set('enemy.speed', 1.0);
   const w = makeWorld({ seed: 3, tuning: t });
   for (let i = 0; i < 3000; i++) w.tick(1 / 60, { forward: 0, turn: 0, fire: false });
@@ -163,8 +163,8 @@ test('C-1: parked tank contacts are speed-invariant (forward=0 gets no swept rad
 test('C4 latch — tankHits is an event count, not inflated by low damage (NEW-3 guard)', () => {
   const run = (damage: number) => {
     const t = makeTuning();
-    // chip damage (damage=0.5 < enemy.hp=10): critter survives many ticks per contact
-    // lethal damage (damage=20 > enemy.hp=10): critter dies on first contact
+    // chip damage (damage=0.5 < enemy.hp=5): critter survives many ticks per contact
+    // lethal damage (damage=20 > enemy.hp=5): critter dies on first contact
     t.set('tank.damage', damage);
     t.set('wave.size', 20); t.set('wave.dripRate', 0.05); t.set('enemy.speed', 1.0);
     const w = makeWorld({ seed: 3, tuning: t });

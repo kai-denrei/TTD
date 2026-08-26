@@ -255,7 +255,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       if (killed) {
         const tower = towers.find((t) => t.id === evt.towerId);
         if (tower !== undefined) tower.kills += 1;
-        const ttk = c.firstHitAt !== null ? elapsed - c.firstHitAt : null;
+        const ttk = elapsed - (c.firstHitAt ?? elapsed);
         telemetry.kill('tower', elapsed - c.bornAt, ttk);
       }
     }
@@ -266,7 +266,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       if (c === undefined) continue;
       const killed = hitCritter(c, evt.damage, tuning, elapsed);
       if (killed) {
-        const ttk = c.firstHitAt !== null ? elapsed - c.firstHitAt : null;
+        const ttk = elapsed - (c.firstHitAt ?? elapsed);
         telemetry.kill('player', elapsed - c.bornAt, ttk);
       }
     }
@@ -297,7 +297,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
         tank.hits += 1;
         if (!tuning.flag('god.tankInvulnerable')) { tank.hp -= 1; if (tank.hp < 0) tank.hp = 0; }
         if (hitCritter(c, tuning.get('tank.damage'), tuning, elapsed)) {
-          const ttk = c.firstHitAt !== null ? elapsed - c.firstHitAt : null;
+          const ttk = elapsed - (c.firstHitAt ?? elapsed);
           telemetry.kill('player', elapsed - c.bornAt, ttk);
         }
       }

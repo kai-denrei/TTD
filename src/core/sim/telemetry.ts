@@ -16,7 +16,7 @@ export type Telemetry = {
   kills: number;
   killsByTower: number;
   killsByPlayer: number;
-  ttk: number[];             // seconds from first hit to death (true TTK); excludes contact-kills with no prior hit
+  ttk: number[];             // seconds from first hit to death (true TTK); 0 for one-shot kills (firstHitAt stamped before damage)
   lifespan: number[];        // seconds from spawn to death (total age)
   waveClearTimes: number[];  // seconds each wave took to clear
   peakConcurrent: number;    // high-water mark of simultaneous live enemies

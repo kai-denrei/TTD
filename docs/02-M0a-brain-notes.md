@@ -99,7 +99,7 @@ node --experimental-strip-types scripts/sweep.ts enemy.speed 0.6 2.0 5
 - `survived`: 0 = heart died during the run, 1 = heart survived
 - `survivedFor`: elapsed time at heart death (or total elapsed if survived)
 - `heartDeathAt`: same as survivedFor when survived=0; 0 when survived=1
-- `ttkMean`/`ttkP90`: now measures **true TTK** — elapsed from first damage to death. Kills with no prior hit (pure ram) are excluded.
+- `ttkMean`/`ttkP90`: now measures **true TTK** — elapsed from first damage to death. 0 for one-shot kills (firstHitAt stamped before damage is applied).
 - `lifespanMean`/`lifespanP90`: total age from spawn to death (this was the old `ttkMean`)
 
 **Reading:** All rows have `survived=0` — the heart dies in every run at this config (one tower at heart). The key post-mortem warning: `survivedFor` shows the heart dies between t=37 (speed=2) and t=62 (speed=0.6), meaning 38%–63% of the 100s run is measuring a dead game. Compare `survivedFor` across settings, not just the final aggregates.
