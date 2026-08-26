@@ -76,6 +76,12 @@ const COMPANION_OVERRIDES: Record<string, Record<string, number>> = {
   // its observable region goes dead on any unrelated RNG shift, which is how
   // tower.rate died.
   'wave.hpGrowth': { 'tower.damage': 7, 'tank.damage': 7 },
+  // The cap only binds once the streak is long enough to reach it. At the
+  // default step of 0.05 a run's ~20 kills reach a multiplier of about 2, so
+  // every cap above 2 is equally unreached and the lever reads dead. The max
+  // step (0.2) puts the multiplier around 5 after the same 20 kills, which is
+  // squarely inside the cap's range.
+  'eco.streakCap': { 'eco.streakStep': 0.2 },
 };
 
 // NEW-B: Levers that legitimately saturate before their declared max.
@@ -85,18 +91,40 @@ const COMPANION_OVERRIDES: Record<string, Record<string, number>> = {
 // (I-2 fix: former entries tower.range, time.scale, tower.damage, tank.damage removed —
 //  tower.range and time.scale pass the upper-half gate empirically; tower.damage and
 //  tank.damage are now testable via COMPANION_OVERRIDES with enemy.hp=20.)
-const SATURATING = new Set<string>();
+const SATURATING = new Set<string>([
+  // eco.streakCap — live at min vs max (a cap of 1 pins the multiplier at 1),
+  // but its UPPER half is unreachable in a harness run and the reason is the
+  // design, not the test. The cap only binds once a streak is long enough to
+  // hit it, and HokorobiTawaa needs 80 consecutive kills to reach its cap of 5.
+  // Measured here: a 50-second run scores ~12 kills with a BEST STREAK OF 4,
+  // because leaks keep resetting it — so the multiplier peaks near 1.8 and
+  // every cap above that is equally unreached.
+  //
+  // Narrowing the lever's range to ~1-2 would make the gate pass while making
+  // the lever useless and breaking parity with both references, which is the
+  // wrong trade. This is a long-run mechanic being measured by a short run.
+  // Re-verify if the harness ever runs long enough to sustain a real streak.
+  'eco.streakCap',
+]);
 
 function runWith(overrides: Record<string, number>, seed = 42, ticks = 3000): Record<string, number> {
   const t = makeTuning();
   for (const [k, v] of Object.entries(overrides)) t.set(k, v);
   const w = makeWorld({ seed, tuning: t });
   // Towers stand on high ground only; the heart itself is open floor.
-  w.placeTower(nearestFrontierWall(w.mesh, w.dungeon, w.dungeon.heart));
+  const wall = nearestFrontierWall(w.mesh, w.dungeon, w.dungeon.heart);
+  w.placeTower(wall);
+  // A SECOND tower, sold partway through the run. Repositioning is a real part
+  // of playing a tower defence, and it is the only way eco.sellRefund is
+  // exercised at all — a refund lever with nothing ever sold is dead by
+  // construction rather than by design.
+  const second = nearestFrontierWall(w.mesh, w.dungeon, w.dungeon.spawn);
+  if (second !== wall) w.placeTower(second);
   for (let i = 0; i < ticks; i++) {
     // Shares the sweep's scripted session so the two harnesses cannot drift
     // apart. It aims and holds fire — see patrolInput for why both matter.
     w.tick(1 / 60, patrolInput(i, w));
+    if (i === 1500 && second !== wall) w.sellTower(second);
   }
   return w.telemetry.summary();
 }

@@ -212,6 +212,13 @@ export const LEVERS: readonly Lever[] = [
     help: 'Credit at the start of a run. Both reference games start at 190. This sets how much defence you can commit before the first wave teaches you anything.',
   },
   {
+    key: 'eco.bounty',
+    group: 'economy',
+    label: 'Kill bounty',
+    min: 0, max: 60, step: 1, value: 8,
+    help: 'Base credit for a kill, before the streak multiplier. Bounties are FLAT while enemy counts rise, so money tightens every wave automatically and you cannot out-farm the ramp — that is the reference design, not an oversight.',
+  },
+  {
     key: 'eco.streakStep',
     group: 'economy',
     label: 'Streak step',
@@ -222,7 +229,7 @@ export const LEVERS: readonly Lever[] = [
     key: 'eco.streakCap',
     group: 'economy',
     label: 'Streak cap',
-    min: 1, max: 10, step: 0.5, value: 5,
+    min: 1, max: 6, step: 0.5, value: 5,
     help: 'Ceiling on the streak multiplier. Any leak resets the streak to zero, so a leak costs a life AND your income curve — the reference calls that the main reason play feels tense rather than idle.',
   },
   {

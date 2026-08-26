@@ -29,6 +29,12 @@ export type Telemetry = {
   decisionsThisPhase: number;  // towers placed/upgraded/sold in current macro phase
   decisionsTotal: number;      // lifetime total of all decisions across all phases
   elapsed: number;             // total time accumulated via tick()
+  // economy — the rig has to see the money, or a tuning session cannot tell a
+  // difficulty change from an income change. Spec §5 predates the economy.
+  credit: number;              // spendable credit right now
+  creditEarned: number;        // lifetime income
+  creditSpent: number;         // lifetime outgoings
+  streakBest: number;          // longest unbroken kill streak
 };
 
 export function makeTelemetry(): {
@@ -40,6 +46,7 @@ export function makeTelemetry(): {
   leak(): void;
   decision(): void;
   waveCleared(seconds: number): void;
+  recordEconomy(e: { credit: number; earned: number; spent: number; streak: number }): void;
   recordHeartDeath(elapsed: number): void;
   resetPhaseCounters(): void;
   summary(): Record<string, number>;
@@ -67,7 +74,21 @@ export function makeTelemetry(): {
     decisionsThisPhase: 0,
     decisionsTotal: 0,
     elapsed: 0,
+    credit: 0,
+    creditEarned: 0,
+    creditSpent: 0,
+    streakBest: 0,
   };
+
+  /** Mirror the economy into telemetry. Called each tick by the World, which
+   *  owns the Economy — telemetry stays a passive recorder and never reaches
+   *  into another system. */
+  function recordEconomy(e: { credit: number; earned: number; spent: number; streak: number }): void {
+    data.credit = e.credit;
+    data.creditEarned = e.earned;
+    data.creditSpent = e.spent;
+    if (e.streak > data.streakBest) data.streakBest = e.streak;
+  }
 
   function tick(dt: number, ctx: { macro: boolean; enemiesAlive: number; tankActing: boolean }): void {
     data.elapsed += dt;
@@ -193,6 +214,10 @@ export function makeTelemetry(): {
       peakConcurrent: data.peakConcurrent,
       decisionsThisPhase: data.decisionsThisPhase,
       decisionsTotal: data.decisionsTotal,
+      credit: data.credit,
+      creditEarned: data.creditEarned,
+      creditSpent: data.creditSpent,
+      streakBest: data.streakBest,
     };
   }
 
@@ -216,9 +241,13 @@ export function makeTelemetry(): {
     data.decisionsThisPhase = 0;
     data.decisionsTotal = 0;
     data.elapsed = 0;
+    data.credit = 0;
+    data.creditEarned = 0;
+    data.creditSpent = 0;
+    data.streakBest = 0;
   }
 
-  return { data, tick, kill, heartHit, tankHit, leak, decision, waveCleared, recordHeartDeath, resetPhaseCounters, summary, reset };
+  return { data, tick, kill, heartHit, tankHit, leak, decision, waveCleared, recordEconomy, recordHeartDeath, resetPhaseCounters, summary, reset };
 }
 
 // --- private helpers ---

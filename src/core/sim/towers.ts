@@ -21,6 +21,12 @@ export type Tower = {
   pos: Vec3;
   cooldown: number; // seconds until next shot
   kills: number;
+  /** Which TowerSpec this is. */
+  key: string;
+  /** Upgrade tier, 0..MAX_TIER. */
+  tier: number;
+  /** Total credit sunk in: purchase plus every upgrade. Drives the refund. */
+  spent: number;
 };
 
 /** A tower asking for a shot. Carries the aim direction so the renderer can
@@ -37,7 +43,7 @@ export type TowerShotRequest = {
 // ---- Tower factory ----------------------------------------------------------
 
 export function makeTower(id: number, cell: number, pos: Vec3): Tower {
-  return { id, cell, pos, cooldown: 0, kills: 0 };
+  return { id, cell, pos, cooldown: 0, kills: 0, key: 'single', tier: 0, spent: 0 };
 }
 
 // ---- Tower step (returns pending damage events) -----------------------------

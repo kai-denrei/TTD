@@ -41,6 +41,9 @@ import { generateDungeon, BLOCKED, isFrontierWall } from '../sphere/dungeon.ts';
 import type { TuningStore } from '../tuning/store.ts';
 import { makeTelemetry } from './telemetry.ts';
 import { makeEventBuffer } from './events.ts';
+import { makeEconomy } from './economy.ts';
+import type { Economy } from './economy.ts';
+import { TOWER_BY_KEY, sellRefund } from './towerspec.ts';
 import type { WorldEvent } from './events.ts';
 import type { Rng } from './rng.ts';
 import { stream } from './rng.ts';
@@ -67,6 +70,8 @@ export type World = {
   towers: Tower[];
   /** Shots currently in flight. The renderer draws tracers from these. */
   projectiles: Projectile[];
+  /** Credits: what a tower costs and where the money comes from. */
+  economy: Economy;
   tank: Tank;
   heartHp: number;
   heartDied: boolean;
@@ -87,7 +92,10 @@ export type World = {
   /** Place a tower on HIGH GROUND: a BLOCKED cell bordering open ground.
    *  Returns false for open cells, buried walls, and occupied cells.
    *  One tower per cell; counts a decision only on success. */
-  placeTower(cell: number): boolean;
+  placeTower(cell: number, key?: string): boolean;
+  /** Sell a tower, refunding eco.sellRefund of everything sunk into it.
+   *  Returns the refund, or 0 if the cell held no tower. */
+  sellTower(cell: number): number;
   setMacro(on: boolean): void;
 };
 
@@ -203,6 +211,12 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   // ── Events ────────────────────────────────────────────────────────────────
   const events = makeEventBuffer();
 
+  // ── Economy ───────────────────────────────────────────────────────────────
+  // Towers cost credit, so placement is a decision rather than a click. Until
+  // M0c-3 towers were free and unlimited, and no lever setting produces
+  // difficulty against unlimited free defence.
+  const economy = makeEconomy(tuning);
+
   // ── Elapsed (post-scale) ──────────────────────────────────────────────────
   let elapsed = 0;
   let waveStartedAt = 0;   // stamped when a wave begins spawning; see tick step 2
@@ -295,6 +309,10 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       c.alive = false;
       // leak = critter reached the heart (always, even in god mode)
       telemetry.leak();
+      // A leak costs twice: a life, and the income curve. Resetting the streak
+      // here rather than at the damage site means god mode still breaks it —
+      // the streak is about letting something through, not about taking damage.
+      economy.leak();
       // heartHit = spec §5 "god-mode hits count normally" — symmetry with tankHit
       // (called unconditionally; only HP mutation + death stamp are gated on invulnerability)
       // Also gated on heartHp > 0 to prevent post-mortem phantom hits.
@@ -316,6 +334,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       if (killed) {
         const ttk = elapsed - (c.firstHitAt ?? elapsed);
         telemetry.kill('tower', elapsed - c.bornAt, ttk);
+        economy.rewardKill(tuning.get('eco.bounty'));
         events.emit({ kind: 'critterDied', at: c.pos, by: 'tower' });
       }
     }
@@ -329,6 +348,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       if (killed) {
         const ttk = elapsed - (c.firstHitAt ?? elapsed);
         telemetry.kill('player', elapsed - c.bornAt, ttk);
+        economy.rewardKill(tuning.get('eco.bounty'));
         events.emit({ kind: 'critterDied', at: c.pos, by: 'tank' });
       }
     }
@@ -362,12 +382,19 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
         if (hitCritter(c, tuning.get('tank.damage'), tuning, elapsed)) {
           const ttk = elapsed - (c.firstHitAt ?? elapsed);
           telemetry.kill('player', elapsed - c.bornAt, ttk);
+          // Ramming pays a premium: it is the riskiest way to kill something,
+          // since it means putting the tank where the critter already is.
+          economy.rewardKill(tuning.get('eco.bounty'), true);
+          events.emit({ kind: 'critterDied', at: c.pos, by: 'tank' });
         }
       }
     }
 
     // 8e. Wave clear detection (check if wave is now fully clear after deaths)
     // (Wave engine handles this internally via enemiesAlive count)
+
+    // ── 8f. Passive income (defaults to zero; see eco.trickle) ───────────────
+    economy.tick(dt);
 
     // ── 9. Telemetry tick ────────────────────────────────────────────────────
     const enemiesAlive = critters.filter((c) => c.alive).length;
@@ -376,6 +403,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       enemiesAlive,
       tankActing,
     });
+    telemetry.recordEconomy(economy);
 
     // ── 10. Prune dead critters and spent projectiles ─────────────────────────
     if (expired.length > 0) {
@@ -407,19 +435,41 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   // M0b briefly allowed open cells instead. That was a mistake: it "corrected"
   // spec §7 to match an implementation that had not yet built walls, rather
   // than to match the design.
-  function placeTower(cell: number): boolean {
+  function placeTower(cell: number, key = 'single'): boolean {
     if (!isFrontierWall(mesh, dungeon, cell)) return false;
 
     // One tower per cell — stacking bypasses the decision budget
     if (towers.some((t) => t.cell === cell)) return false;
 
+    const spec = TOWER_BY_KEY.get(key);
+    if (spec === undefined) return false;
+    // Charged LAST, after every other check, so a refused placement never
+    // takes money. Ordering matters here: a rule added later above this line
+    // is free, one added below it silently bills for nothing.
+    if (!economy.spend(spec.cost)) return false;
+
     const pos: Vec3 = mesh.centers[cell] ?? [0, 1, 0];
     const tower = makeTower(nextTowerId++, cell, pos);
+    tower.key = key;
+    tower.spent = spec.cost;
     towers.push(tower);
 
     // Count as a decision ONLY on success
     telemetry.decision();
     return true;
+  }
+
+  /** Sell the tower on `cell`, refunding a fraction of everything sunk into it.
+   *  Returns the credit refunded, or 0 if there was nothing to sell. */
+  function sellTower(cell: number): number {
+    const i = towers.findIndex((t) => t.cell === cell);
+    if (i === -1) return 0;
+    const tower = towers[i]!;
+    const refund = sellRefund(tower.spent, tuning.get('eco.sellRefund'));
+    economy.credited(refund);
+    towers.splice(i, 1);
+    telemetry.decision();
+    return refund;
   }
 
   // ---- setMacro -------------------------------------------------------------
@@ -452,6 +502,8 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     tick,
     drainEvents: () => events.drain(),
     placeTower,
+    sellTower,
+    economy,
     setMacro,
   };
 }
