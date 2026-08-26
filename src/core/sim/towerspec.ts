@@ -13,10 +13,18 @@
 // a mortar that lofts and detonates whether or not it hits, a field that
 // touches every enemy in range at once, a hitscan beam with no travel at all.
 //
-// DAMAGE SCALE. The references quote damage on a 1-90 scale against enemies
-// with 20-500 HP; TTD's critters carry 1-20. The conversion is `hk / 90 * 6`,
-// applied once at the table so the ratios between towers — which are the
-// design — survive exactly while the absolute numbers land on TTD's scale.
+// DAMAGE SCALE — AND THE MISTAKE WORTH NOT REPEATING. The references quote
+// damage on a 1-90 scale; TTD critters carry 1-20 HP with a default of 5. The
+// first attempt rescaled damage and HP INDEPENDENTLY onto TTD's range, which
+// silently broke the only thing that matters: a single-shot tower went from
+// killing a baseline enemy in ~2 hits to needing 6, and every tower lever read
+// dead because towers stopped killing anything at all.
+//
+// What has to be preserved is the DAMAGE-TO-HP RATIO. The reference's baseline
+// tower does 14 against a 20 HP enemy — two shots. TTD's default critter has
+// 5 HP, so the same two-shot feel needs ~2.5 damage, giving the factor below.
+// Ratios between towers are then exact, and the absolutes land where the rest
+// of TTD's numbers already live.
 
 export type AttackKind = 'single' | 'spread' | 'homing' | 'slowfield' | 'mortar' | 'beam';
 
@@ -44,10 +52,11 @@ export type TowerSpec = {
   help: string;
 };
 
-/** The references quote damage 1-90 against 20-500 HP enemies; TTD critters
- *  carry 1-20 HP. Converting once here keeps the RATIOS — which are the actual
- *  design — while landing the absolutes on our scale. */
-const HK = (d: number): number => +((d / 90) * 6).toFixed(3);
+/** Reference damage -> TTD damage, preserving the damage:HP ratio.
+ *  14 damage vs a 20 HP enemy is two shots; 2.52 vs TTD's 5 HP default is the
+ *  same two shots. Everything else follows from that one anchor. */
+const HP_RATIO = 2.52 / 14;
+const HK = (d: number): number => +(d * HP_RATIO).toFixed(3);
 
 export const SPREAD_FAN = 0.22; // radians between pellets
 

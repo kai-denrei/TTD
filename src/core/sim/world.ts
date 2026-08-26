@@ -271,22 +271,49 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       }
     }
 
-    // ── 5. Towers tick → spawn projectiles (they no longer deal damage) ──────
-    const shotRequests = stepTowers(towers, critters, dt, tuning);
+    // ── 5. Towers tick → spawn projectiles, or resolve hitscan immediately ───
+    // Six attack kinds, three resolutions: beam and slowfield are instant,
+    // everything else becomes a projectile that has to travel and can miss.
+    const shotRequests = stepTowers(towers, critters, dt, tuning, meanChord);
+    const towerHitscan: Array<{ critterId: number; damage: number }> = [];
     for (const req of shotRequests) {
-      const p = makeProjectile(nextProjectileId++, {
-        pos: req.from,
-        dir: req.dir,
-        speed: tuning.get('tower.projSpeed'),
-        damage: req.damage,
-        // A shot may chase slightly beyond the tower's range; without the
-        // margin a target at the edge of range is unhittable by construction.
-        range: tuning.get('tower.range') * 1.35,
-        source: 'tower',
-        homingId: req.critterId,
-      });
-      projectiles.push(p);
-      events.emit({ kind: 'shotFired', at: p.pos, dir: p.dir, source: 'tower' });
+      if (req.attack === 'slowfield') {
+        // Touches every critter in range at once: chip damage plus a heavy
+        // slow. The tether is drawn per target so the field reads as a field.
+        for (const id of req.fieldTargets ?? []) {
+          const c = critters.find((x) => x.id === id && x.alive);
+          if (c === undefined) continue;
+          towerHitscan.push({ critterId: id, damage: req.damage });
+          c.slowFactor = req.slowFactor ?? 1;
+          c.slowLeft = req.slowDur ?? 0;
+          events.emit({ kind: 'beam', from: req.from, to: c.pos });
+        }
+        continue;
+      }
+      if (req.attack === 'beam') {
+        const c = critters.find((x) => x.id === req.critterId && x.alive);
+        if (c === undefined) continue;
+        towerHitscan.push({ critterId: req.critterId, damage: req.damage });
+        events.emit({ kind: 'beam', from: req.from, to: c.pos });
+        continue;
+      }
+      for (const dir of req.dirs) {
+        const p = makeProjectile(nextProjectileId++, {
+          pos: req.from,
+          dir,
+          speed: req.projSpeed,
+          damage: req.damage,
+          range: req.rangeWorld,
+          source: 'tower',
+          // A mortar is dumb-fire and detonates where it lands; only the
+          // steering kinds chase. A homing spread would make the fan pointless.
+          homingId: req.attack === 'homing' ? req.critterId : null,
+          splash: req.splashWorld,
+          detonateAtRange: req.attack === 'mortar',
+        });
+        projectiles.push(p);
+        events.emit({ kind: 'shotFired', at: p.pos, dir: p.dir, source: 'tower' });
+      }
     }
 
     // ── 6. Tank tick → collect damage events ─────────────────────────────────
@@ -323,6 +350,18 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
           heartHp -= 1;
           if (heartHp === 0) telemetry.recordHeartDeath(elapsed);
         }
+      }
+    }
+
+    // 8b0. Hitscan tower damage (beam and slowfield resolve the tick they fire)
+    for (const h of towerHitscan) {
+      const c = critters.find((x) => x.id === h.critterId);
+      if (c === undefined) continue;
+      if (hitCritter(c, h.damage, tuning, elapsed)) {
+        const ttk = elapsed - (c.firstHitAt ?? elapsed);
+        telemetry.kill('tower', elapsed - c.bornAt, ttk);
+        economy.rewardKill(tuning.get('eco.bounty'));
+        events.emit({ kind: 'critterDied', at: c.pos, by: 'tower' });
       }
     }
 

@@ -74,7 +74,7 @@ describe('tank aimed fire — the barrel finally matters', () => {
     const critter = {
       id: 1, alive: true, hp: 5, cur: 0, next: 0, prog: 0, pos,
       envValue: 1, envTarget: 1, envLeft: 1, reactMult: 1, reactLeft: 0,
-      contactLeft: 0, bornAt: 0, firstHitAt: null,
+      contactLeft: 0, slowFactor: 1, slowLeft: 0, bornAt: 0, firstHitAt: null,
     };
     return stepTank(tank, 1 / 60, { forward: 0, turn: 0, fire: true }, [critter], t).events;
   }
@@ -110,7 +110,7 @@ describe('tank heat and lockout — you cannot hold the trigger', () => {
       id: 1, alive: true, hp: 1e9, cur: 0, next: 0, prog: 0,
       pos: [Math.sin(0.2), 0, Math.cos(0.2)] as [number, number, number],
       envValue: 1, envTarget: 1, envLeft: 1, reactMult: 1, reactLeft: 0,
-      contactLeft: 0, bornAt: 0, firstHitAt: null,
+      contactLeft: 0, slowFactor: 1, slowLeft: 0, bornAt: 0, firstHitAt: null,
     };
     let shots = 0;
     const steps = Math.round(seconds * 60);

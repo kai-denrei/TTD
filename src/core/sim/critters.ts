@@ -33,6 +33,9 @@ export type Critter = {
   // hit reaction
   reactMult: number;  // 1 when idle, accelOnHit when reacting
   reactLeft: number;  // seconds remaining in the reaction
+  // slow field (the slowfield tower). 1 = unslowed.
+  slowFactor: number;
+  slowLeft: number;
   // tank contact cooldown
   contactLeft: number; // seconds remaining before this critter can ram the tank again (0 = ready)
   bornAt: number;
@@ -123,6 +126,8 @@ export function spawnCritter(
     pos: [0, 0, 0],
     envValue: 1, envTarget, envLeft: envPhase,
     reactMult: 1, reactLeft: 0,
+    slowFactor: 1,
+    slowLeft: 0,
     contactLeft: 0,
     bornAt: now,
     firstHitAt: null,
@@ -132,7 +137,12 @@ export function spawnCritter(
 
 /** effectiveSpeed reads all levers live — never cached. */
 export function effectiveSpeed(c: Critter, tuning: TuningStore): number {
-  return tuning.get('enemy.speed') * c.envValue * c.reactMult;
+  // slowFactor is the slowfield tower's contribution. It multiplies rather
+  // than clamping, so a slow stacks with a hit reaction instead of one silently
+  // overriding the other — a slowed critter that then gets hit by an
+  // accel-on-hit tower should end up somewhere between, not at whichever
+  // system happened to write last.
+  return tuning.get('enemy.speed') * c.envValue * c.reactMult * c.slowFactor;
 }
 
 /** Advance one critter. Returns 'arrived' when it reaches the heart. */
@@ -165,7 +175,18 @@ export function stepCritter(
     c.envValue = Math.max(1 - amp, Math.min(1 + amp, c.envValue));
   }
 
-  // ── 2. Update hit reaction timer and tank contact cooldown ───────────────
+  // ── 2. Update hit reaction timer, slow field, and tank contact cooldown ──
+  // The slow field expires on its own timer rather than being re-applied every
+  // tick, so a critter that walks OUT of a slow tower's range stays slowed for
+  // the remainder of the duration. That is what makes the field a zone of
+  // control rather than a leash.
+  if (c.slowLeft > 0) {
+    c.slowLeft -= dt;
+    if (c.slowLeft <= 0) {
+      c.slowLeft = 0;
+      c.slowFactor = 1;
+    }
+  }
   if (c.reactLeft > 0) {
     c.reactLeft -= dt;
     if (c.reactLeft <= 0) {

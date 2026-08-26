@@ -49,14 +49,20 @@ describe('tower roster', () => {
     }
   });
 
-  test('damage lands on TTD\'s 1-20 critter HP scale, not the reference 1-90', () => {
-    for (const t of TOWERS) {
-      assert.ok(t.damage <= 20, `${t.key} damage ${t.damage} is off TTD's scale`);
-    }
-    // The sniper is the heavy hitter and must still one-shot a default critter.
-    assert.ok(TOWER_BY_KEY.get('sniper')!.damage >= 4);
-    // ...and rapid must NOT, or its tempo advantage is meaningless.
-    assert.ok(TOWER_BY_KEY.get('rapid')!.damage < 1);
+  test('damage preserves the reference damage-to-HP ratio, not just its scale', () => {
+    // The first version of this table rescaled damage and HP independently and
+    // broke the only property that matters: the baseline tower needed 6 shots
+    // to kill a default critter instead of 2, and every tower lever read dead.
+    const DEFAULT_CRITTER_HP = 5;
+    const single = TOWER_BY_KEY.get('single')!.damage;
+    const shots = Math.ceil(DEFAULT_CRITTER_HP / single);
+    assert.equal(shots, 2, `the baseline tower needs ${shots} shots to kill a default critter`);
+
+    // The sniper one-shots a default critter — that is what 130 credits buys.
+    assert.ok(TOWER_BY_KEY.get('sniper')!.damage >= DEFAULT_CRITTER_HP);
+    // Rapid must NOT one-shot, or its tempo advantage is meaningless.
+    assert.ok(TOWER_BY_KEY.get('rapid')!.damage < DEFAULT_CRITTER_HP);
+    for (const t of TOWERS) assert.ok(t.damage <= 20, `${t.key} damage is off TTD's scale`);
   });
 
   test('the roster preserves the reference damage RATIOS', () => {

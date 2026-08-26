@@ -9,7 +9,7 @@ function critterAt(id: number, pos: readonly [number, number, number], alive = t
   return {
     id, alive, hp: 5, cur: 0, next: 0, prog: 0, pos,
     envValue: 1, envTarget: 1, envLeft: 1, reactMult: 1, reactLeft: 0,
-    contactLeft: 0, bornAt: 0, firstHitAt: null,
+    contactLeft: 0, slowFactor: 1, slowLeft: 0, bornAt: 0, firstHitAt: null,
   };
 }
 

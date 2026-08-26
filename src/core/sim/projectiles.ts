@@ -36,6 +36,11 @@ export type Projectile = {
   source: EventSource;
   /** Critter id to chase, or null for dumb-fire. */
   homingId: number | null;
+  /** Splash radius in world units; 0 for a direct hit. */
+  splash: number;
+  /** Mortar behaviour: detonate on reaching `range` even without a hit. That
+   *  is what makes a mortar an area denial weapon rather than a slow bullet. */
+  detonateAtRange: boolean;
 };
 
 export type ProjectileHit = {
@@ -60,6 +65,7 @@ export function makeProjectile(
   opts: {
     pos: Vec3; dir: Vec3; speed: number; damage: number;
     range: number; source: EventSource; homingId: number | null;
+    splash?: number; detonateAtRange?: boolean;
   },
 ): Projectile {
   return {
@@ -72,6 +78,8 @@ export function makeProjectile(
     damage: opts.damage,
     source: opts.source,
     homingId: opts.homingId,
+    splash: opts.splash ?? 0,
+    detonateAtRange: opts.detonateAtRange ?? false,
   };
 }
 
@@ -134,12 +142,42 @@ export function stepProjectiles(
       const dy = c.pos[1] - p.pos[1];
       const dz = c.pos[2] - p.pos[2];
       if (Math.sqrt(dx * dx + dy * dy + dz * dz) > reach) continue;
-      hits.push({ critterId: c.id, damage: p.damage, source: p.source, at: p.pos });
       hit = true;
       break;
     }
 
-    if (hit || p.travelled >= p.range) expired.push(p.id);
+    // A mortar detonates when it reaches its throw distance whether or not it
+    // hit anything — that is what makes it area denial rather than a slow
+    // bullet you can simply walk around.
+    const detonating = hit || (p.detonateAtRange && p.travelled >= p.range);
+
+    if (detonating) {
+      if (p.splash > 0) {
+        // Splash pays EVERY critter inside the radius, so one shell into a
+        // packed lane is worth many into a spread one. That is the whole
+        // reason to buy a mortar.
+        for (const c of critters) {
+          if (!c.alive) continue;
+          const dx = c.pos[0] - p.pos[0];
+          const dy = c.pos[1] - p.pos[1];
+          const dz = c.pos[2] - p.pos[2];
+          if (Math.sqrt(dx * dx + dy * dy + dz * dz) > p.splash) continue;
+          hits.push({ critterId: c.id, damage: p.damage, source: p.source, at: c.pos });
+        }
+      } else if (hit) {
+        for (const c of critters) {
+          if (!c.alive) continue;
+          const dx = c.pos[0] - p.pos[0];
+          const dy = c.pos[1] - p.pos[1];
+          const dz = c.pos[2] - p.pos[2];
+          if (Math.sqrt(dx * dx + dy * dy + dz * dz) > reach) continue;
+          hits.push({ critterId: c.id, damage: p.damage, source: p.source, at: p.pos });
+          break;
+        }
+      }
+    }
+
+    if (detonating || p.travelled >= p.range) expired.push(p.id);
   }
 
   return { hits, expired };

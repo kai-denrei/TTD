@@ -27,9 +27,14 @@ test('REPLAY DETERMINISM: same seed + preset + input => identical telemetry', ()
 
 test('towers kill critters and it is attributed to the tower', () => {
   const t = makeTuning();
-  t.set('tower.damage', 100); t.set('tower.range', 0.5); t.set('tower.rate', 10); t.set('enemy.speed', 2);
+  // Since M0c-3 the global tower.* levers are SCALARS over the roster, not
+  // absolute stats — 0.5 range means HALF range, which is why this test used to
+  // pass values that now mean the opposite of what they did.
+  t.set('tower.damage', 8); t.set('tower.range', 3); t.set('tower.rate', 4); t.set('enemy.speed', 2);
   const w = makeWorld({ seed: 1, tuning: t });
   // Towers need high ground; the spawn cell itself is open floor.
+  // Enough credit to actually buy the tower: placement now charges.
+  t.set('eco.startCredit', 1000);
   w.placeTower(nearestFrontierWall(w.mesh, w.dungeon, w.dungeon.spawn));
   scripted(w, 3000);
   assert.ok(w.telemetry.data.killsByTower > 0, 'tower never killed anything');
