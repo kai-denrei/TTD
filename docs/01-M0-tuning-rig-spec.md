@@ -151,7 +151,10 @@ plays on a phone).
 - **Portals:** 2 fixed spawn gates
 - **Critter:** one type, dot-cloud, walks the nav graph to the heart, carries
   the speed envelope + hit reaction
-- **Tower:** one type, placed on wall cells, nearest-target
+- **Tower:** one type, placed on **open (non-BLOCKED) cells**, nearest-target.
+  (Corrected in M0b: this said "wall cells", which was the error, not the code.
+  A tower on a BLOCKED cell is unreachable by the nav graph and unpickable by
+  the raycast, so it could neither shoot nor be placed.)
 - **Tank:** drives, shoots, rams
 - **Waves:** driven by the §4 intensity levers
 

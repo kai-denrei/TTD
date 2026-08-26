@@ -66,7 +66,10 @@ export type World = {
   tick(dt: number, input: TankInput): void;
   /** Place a tower on an open (non-BLOCKED) cell. Returns false if the cell is BLOCKED or already occupied.
    *  One tower per cell is enforced. Counts a decision only on success.
-   *  M0a placement rule: open cells only (spec §7 says "wall cells" — flagged for M0b spec update). */
+   *  Open cells only. Spec §7 originally said "wall cells"; that was the spec's
+   *  error and it is corrected there — a tower on a BLOCKED cell is unreachable
+   *  by the nav graph and unpickable by the raycast, so it could neither shoot
+   *  nor be placed. */
   placeTower(cell: number): boolean;
   setMacro(on: boolean): void;
 };

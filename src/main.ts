@@ -57,7 +57,7 @@ world.setMacro(true); // start in the build family
 // misuse and makes the app inspectable from a headless browser — which is the
 // only way to verify input plumbing that no unit test can reach.
 declare global {
-  interface Window { __ttd?: { world: typeof world; rig: typeof rig; input: typeof input; lastTap?: unknown } }
+  interface Window { __ttd?: { world: typeof world; rig: typeof rig; input: typeof input; lastTap?: unknown; camPos?: [number, number, number] } }
 }
 window.__ttd = { world, rig, input };
 
@@ -146,6 +146,7 @@ function frame(now: number): void {
     renderTarget.camera.shakeGain,
   );
   stage.camera.position.set(cam.pos[0], cam.pos[1], cam.pos[2]);
+  if (window.__ttd) window.__ttd.camPos = [cam.pos[0], cam.pos[1], cam.pos[2]];
   stage.camera.up.set(cam.up[0], cam.up[1], cam.up[2]);
   stage.camera.lookAt(cam.look[0], cam.look[1], cam.look[2]);
 

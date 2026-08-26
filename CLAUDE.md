@@ -91,17 +91,36 @@ npm run sweep -- enemy.speed 0.6 2.0 5      # headless lever comparison
 
 ## State
 
-**M0a (the brain) is complete and pushed** — 151 tests, cross-process replay
-determinism verified. **M0b is next**: make it visible — render layer, app
-shell, dashboard (own panel, grouped, live), presets (localStorage + export
-string), god toggles, telemetry readout. See `docs/01-M0-tuning-rig-spec.md`
-§6/§8 and vision §11.
+**M0a (the brain) and M0b (the rig made visible) are complete** — 239 tests,
+cross-process replay determinism verified. `npm run dev` serves a rendered,
+drivable, tunable board: dot-cloud units with bloom, five camera modes, tank on
+keyboard + touch, and a gated Admin Mode dashboard that tunes all 28 levers
+live and adjudicates A/B changes over three seeds.
 
-Known state when tuning: `survivedFor` is the cleanest difficulty signal
-(monotone 61.6s→37.1s as `enemy.speed` 0.6→2.0). **Every current setting loses
-with one tower** — a calibration finding, not a bug. `playerKillShare` is
-statistically weak at present settings (11–16 kills/run); it needs longer runs
-or a survivable config before it can adjudicate macro-vs-tactical balance.
+**The dashboard is Admin Mode — internal tooling, never shipped to players.**
+It is gated (`?admin=1`, backtick, or a five-tap top-left corner), and
+`src/ui/admin/` is a leaf nothing in `core/` or `render/` imports. Spec §6's
+"mobile-legible" describes where the tool is used, not a player surface.
+
+**M1 is next**: critter minds — the posture machine (stalk/muster/avoid/flank)
+and the speed envelope. First real feel test, against a rig that can now
+measure it. See vision §6.2 and §11.
+
+Known state when tuning — full detail in `docs/04-M0b-notes.md` §6:
+
+- **`survivedFor` is the difficulty signal.** `heartHits` is not: runs now
+  truncate at heart death, so it saturates at the heart's 20 HP. M0a's reported
+  climb of 32 → 64 was post-mortem accrual, not rising pressure.
+- **Every default setting still loses with one tower** — and more sharply than
+  M0a recorded: with an idle tank the tower gets *zero* kills, because
+  `tower.damage` 3 vs `enemy.hp` 5 needs two shots and the 1.0 s cooldown
+  exceeds a critter's dwell time in range.
+- **Compare is a three-seed mean, not a truth.** Critters share one RNG stream,
+  so a combat lever shifts survivor composition and every later envelope draw.
+- **The layer-balance pane has data for the first time** (`macroShare`,
+  `modeSwitches`), because the camera family switch calls `setMacro`. No
+  human-played session has been recorded yet, so treat current values as proof
+  the pipe carries data, not as balance evidence.
 
 ## Lessons that must not be relearned
 
