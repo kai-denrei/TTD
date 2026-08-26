@@ -99,36 +99,44 @@ collision into an explicit failure rather than a surprise. 5144 pairs with the
 
 ## State
 
-**M0a (the brain) and M0b (the rig made visible) are complete** — 239 tests,
-cross-process replay determinism verified. `npm run dev` serves a rendered,
-drivable, tunable board: dot-cloud units with bloom, five camera modes, tank on
-keyboard + touch, and a gated Admin Mode dashboard that tunes all 28 levers
-live and adjudicates A/B changes over three seeds.
+**M0a (brain), M0b (rig made visible) and M0c-1 (walls & high ground) are
+complete** — 265 tests, determinism verified. `npm run dev` on **port 5144**
+(pinned; vite's default 5173 is taken by another project) serves a board that
+reads as a 3D maze: BLOCKED cells extrude into walls with tops and skirts,
+towers build on the high ground overlooking corridors, and the tank steers
+correctly.
+
+**M0c is PoC parity in three chunks.** Chunk 1 is done. Next:
+- **Chunk 2 — combat made visible.** M0b rendered state but not *events*: the
+  sim resolves tower damage, kills and hits every tick and nothing draws any of
+  it. Tower shots, tracers, beams, muzzle flashes, hit flashes, death bursts;
+  tank aimed fire along its barrel, plus the PoC's laser heat/lockout.
+- **Chunk 3 — tower roster & economy.** Types with distinct attacks, cost,
+  sell, upgrade, range rings.
+
+Economy and win condition come *after* those. Balancing what you cannot see or
+steer is the mistake that started this milestone.
 
 **The dashboard is Admin Mode — internal tooling, never shipped to players.**
-It is gated (`?admin=1`, backtick, or a five-tap top-left corner), and
-`src/ui/admin/` is a leaf nothing in `core/` or `render/` imports. Spec §6's
-"mobile-legible" describes where the tool is used, not a player surface.
+Gated by `?admin=1`, backtick, or a five-tap top-left corner; `src/ui/admin/` is
+a leaf nothing in `core/` or `render/` imports.
 
-**M1 is next**: critter minds — the posture machine (stalk/muster/avoid/flank)
-and the speed envelope. First real feel test, against a rig that can now
-measure it. See vision §6.2 and §11.
+Known state when tuning — full detail in `docs/05-M0c-notes.md`:
 
-Known state when tuning — full detail in `docs/04-M0b-notes.md` §6:
-
-- **`survivedFor` is the difficulty signal.** `heartHits` is not: runs now
-  truncate at heart death, so it saturates at the heart's 20 HP. M0a's reported
-  climb of 32 → 64 was post-mortem accrual, not rising pressure.
-- **Every default setting still loses with one tower** — and more sharply than
-  M0a recorded: with an idle tank the tower gets *zero* kills, because
-  `tower.damage` 3 vs `enemy.hp` 5 needs two shots and the 1.0 s cooldown
-  exceeds a critter's dwell time in range.
-- **Compare is a three-seed mean, not a truth.** Critters share one RNG stream,
-  so a combat lever shifts survivor composition and every later envelope draw.
-- **The layer-balance pane has data for the first time** (`macroShare`,
-  `modeSwitches`), because the camera family switch calls `setMacro`. No
-  human-played session has been recorded yet, so treat current values as proof
-  the pipe carries data, not as balance evidence.
+- **`survivedFor` is the difficulty signal.** `heartHits` is not: runs truncate
+  at heart death, so it saturates at the heart's 20 HP.
+- **Tower placement is currently a decision with no consequence.** At default
+  stats, a tower overlooking the lane versus one on a distant wall differ by 4%
+  (`survivedFor` 48.33 vs 46.35). At `tower.damage=20` the same comparison is
+  87.53 vs 46.35. The one-tower baseline is not merely weak — it is weak enough
+  that *where you build does not matter*.
+- **Three levers' observability is limited by one root cause:** the default
+  tower cannot complete a kill (`tower.damage` 3 vs `enemy.hp` 5 needs two hits
+  before the critter leaves range). `tower.damage`, `tank.damage` and now
+  `tower.rate` all need a companion override to be testable.
+- **Terrain stays under the bloom threshold** by design — bloom is for emissive
+  things. The board reads by relief, not brightness.
+- **Compare is a three-seed mean, not a truth.** Critters share one RNG stream.
 
 ## Lessons that must not be relearned
 

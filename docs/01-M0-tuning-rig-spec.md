@@ -151,10 +151,14 @@ plays on a phone).
 - **Portals:** 2 fixed spawn gates
 - **Critter:** one type, dot-cloud, walks the nav graph to the heart, carries
   the speed envelope + hit reaction
-- **Tower:** one type, placed on **open (non-BLOCKED) cells**, nearest-target.
-  (Corrected in M0b: this said "wall cells", which was the error, not the code.
-  A tower on a BLOCKED cell is unreachable by the nav graph and unpickable by
-  the raycast, so it could neither shoot nor be placed.)
+- **Tower:** one type, placed on **wall cells (high ground)** that border open
+  ground, nearest-target. Towers never stand on open floor.
+  *(M0b briefly changed this to "open cells", reasoning that a BLOCKED cell was
+  unreachable and unpickable — both true only because M0b had not yet built
+  walls, so the spec was corrected to match a gap in the implementation rather
+  than the design. M0c-1 restores it. The rationale, from the PoC: walls carry
+  no enemy pathing, so a tower on one can never dam a lane, which is why
+  placement needs no connectivity guard.)*
 - **Tank:** drives, shoots, rams
 - **Waves:** driven by the §4 intensity levers
 
