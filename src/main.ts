@@ -14,6 +14,7 @@ import { makeUnits } from './render/units.ts';
 import { makeEffects } from './render/effects.ts';
 import { makeRings } from './render/rings.ts';
 import { makeShop, cellSize, rangeWorld } from './ui/shop.ts';
+import { makeTowerPanel } from './ui/towerpanel.ts';
 import { TOWER_BY_KEY } from './core/sim/towerspec.ts';
 import { isFrontierWall } from './core/sphere/dungeon.ts';
 import { makeRenderTarget, readRenderState } from './render/bindings.ts';
@@ -93,9 +94,11 @@ function placeFromTap(tap: { x: number; y: number }): void {
   // what it covers. This is the common reason to tap a wall you have built on.
   const standing = world.towers.find((t) => t.cell === cell);
   if (standing !== undefined) {
+    panel.select(cell);
     showRange(cell, standing.key, standing.tier, 0);
     return;
   }
+  panel.select(null); // tapping anywhere else dismisses the panel
 
   if (world.placeTower(cell, shop.selectedKey)) {
     showRange(cell, shop.selectedKey, 0, 0); // sticky: what you just bought
@@ -132,6 +135,23 @@ function showRange(cell: number, key: string, tier: number, ttl: number): void {
   if (spec === undefined || pos === undefined) return;
   rings.show(pos, rangeWorld(spec, tier, CELL, tuning.get('tower.range')), spec.color, ttl);
 }
+
+const panel = makeTowerPanel(world, app, {
+  onUpgrade: (cell) => {
+    if (world.upgradeTower(cell)) {
+      const t = world.towers.find((x) => x.cell === cell);
+      // Show the ring you just paid for — an upgrade that changes range with no
+      // visible confirmation feels like nothing happened.
+      if (t !== undefined) showRange(cell, t.key, t.tier, 0);
+    } else {
+      rig.addTrauma(0.12);
+    }
+  },
+  onSell: (cell) => {
+    world.sellTower(cell);
+    rings.hide(); // drop the sticky ring for a tower that no longer exists
+  },
+});
 
 // Admin Mode is a leaf: nothing in core/ or render/ imports it, and the
 // dashboard is only constructed once the gate actually opens.
@@ -175,6 +195,7 @@ function frame(now: number): void {
   effects.sync(world.drainEvents(), world.projectiles, frameSeconds, renderTarget.fx);
   hud.sync(world);
   shop.sync();
+  panel.sync();
   rings.sync(frameSeconds);
   dashboard?.sync(world);
   if (loop.halted) hud.showRunOver(world.telemetry.summary());

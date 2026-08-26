@@ -74,6 +74,13 @@ export const LEVERS: readonly Lever[] = [
   },
 
   {
+    key: 'wave.buildTime',
+    group: 'intensity',
+    label: 'Build time (s)',
+    min: 0, max: 60, step: 1, value: 10,
+    help: 'Quiet seconds before wave 1 arrives. You start with credit and nowhere to have spent it yet — without this the first wave lands while the board is still empty, which reads as the game starting without you. Both references give you a build phase; HokorobiTawaa uses 8s.',
+  },
+  {
     key: 'wave.winAt',
     group: 'intensity',
     label: 'Waves to win',

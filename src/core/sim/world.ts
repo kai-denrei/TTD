@@ -43,7 +43,7 @@ import { makeTelemetry } from './telemetry.ts';
 import { makeEventBuffer } from './events.ts';
 import { makeEconomy } from './economy.ts';
 import type { Economy } from './economy.ts';
-import { TOWER_BY_KEY, sellRefund, unlockedKeys } from './towerspec.ts';
+import { TOWER_BY_KEY, sellRefund, unlockedKeys, MAX_TIER, upgradeCost } from './towerspec.ts';
 import { ENEMY_BY_TYPE } from './enemyspec.ts';
 import type { WorldEvent } from './events.ts';
 import type { Rng } from './rng.ts';
@@ -103,6 +103,9 @@ export type World = {
   /** Sell a tower, refunding eco.sellRefund of everything sunk into it.
    *  Returns the refund, or 0 if the cell held no tower. */
   sellTower(cell: number): number;
+  /** Upgrade a tower one tier, charging its upgrade cost. False if maxed,
+   *  missing, or unaffordable. */
+  upgradeTower(cell: number): boolean;
   setMacro(on: boolean): void;
 };
 
@@ -535,6 +538,30 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     return true;
   }
 
+  /** Upgrade the tower on `cell` one tier. Returns false if there is no tower,
+   *  it is already at max tier, or the credit is short.
+   *
+   *  Charged LAST, like placeTower, so a refused upgrade never takes money —
+   *  the ordering is the rule, not an accident of how it was written. */
+  function upgradeTower(cell: number): boolean {
+    const tower = towers.find((t) => t.cell === cell);
+    if (tower === undefined) return false;
+    const spec = TOWER_BY_KEY.get(tower.key);
+    if (spec === undefined) return false;
+    if (tower.tier >= MAX_TIER) return false;
+    const cost = upgradeCost(spec, tower.tier);
+    if (cost === null) return false;
+    if (!economy.spend(cost)) return false;
+
+    tower.tier += 1;
+    // Load-bearing: sellRefund reads `spent`, so accumulating the upgrade here
+    // is what makes a fully upgraded tower refund proportionally instead of
+    // refunding only its purchase price.
+    tower.spent += cost;
+    telemetry.decision(); // an upgrade IS a decision, same as a place or a sell
+    return true;
+  }
+
   /** Sell the tower on `cell`, refunding a fraction of everything sunk into it.
    *  Returns the credit refunded, or 0 if there was nothing to sell. */
   function sellTower(cell: number): number {
@@ -581,6 +608,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     drainEvents: () => events.drain(),
     placeTower,
     sellTower,
+    upgradeTower,
     economy,
     setMacro,
   };

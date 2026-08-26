@@ -3,12 +3,16 @@ import assert from 'node:assert/strict';
 import { makeTuning } from '../tuning/store.ts';
 import { BLOCKED, nearestFrontierWall } from '../sphere/dungeon.ts';
 import { makeWorld } from './world.ts';
+import { patrolInput } from './runner.ts';
 import type { World } from './world.ts';
 
+// Shares the sweep's scripted session rather than keeping a third copy. It
+// aims and holds fire, which matters here: with a 45-degree fire arc a tank
+// that merely sweeps its heading hits nothing, and "a non-degenerate session"
+// then measures a tank that never fought. Deterministic — patrolInput reads
+// world state, it does not roll dice.
 const scripted = (w: World, steps: number) => {
-  for (let i = 0; i < steps; i++) {
-    w.tick(1 / 60, { forward: (i % 120) < 60 ? 1 : -1, turn: Math.sin(i / 30), fire: i % 45 === 0 });
-  }
+  for (let i = 0; i < steps; i++) w.tick(1 / 60, patrolInput(i, w));
 };
 
 test('REPLAY DETERMINISM: same seed + preset + input => identical telemetry', () => {
@@ -90,7 +94,13 @@ test('time.scale multiplies the step', () => {
 test('a headless run produces a non-degenerate session', () => {
   const t = makeTuning(); t.set('enemy.speed', 1.5);
   const w = makeWorld({ seed: 6, tuning: t });
-  w.placeTower(w.dungeon.heart);
+  // Towers stand on HIGH GROUND. This line used to pass dungeon.heart, which
+  // is open floor and has been refused since M0c-1 — the test kept passing only
+  // because the tank was doing all the killing, and it went red the moment a
+  // build phase gave the tank ten fewer seconds. Assert the placement instead
+  // of assuming it.
+  const placed = w.placeTower(nearestFrontierWall(w.mesh, w.dungeon, w.dungeon.heart));
+  assert.ok(placed, 'baseline tower was never placed');
   scripted(w, 6000);
   const s = w.telemetry.summary();
   assert.ok((s['elapsed'] ?? 0) > 90, 'sim did not advance');
@@ -147,6 +157,9 @@ test('C-1: parked tank contacts are speed-invariant (forward=0 gets no swept rad
     t.set('tank.speed', speed);
     t.set('tank.damage', 20); // one-shot so kills are countable
     t.set('wave.size', 20); t.set('wave.dripRate', 0.05); t.set('enemy.speed', 1.0);
+    // This test is about contact radius, not wave timing: skip the build phase
+    // so its pinned kill count measures the thing it claims to measure.
+    t.set('wave.buildTime', 0);
     const w = makeWorld({ seed: 3, tuning: t });
     // Parked tank — forward=0 means no movement, no displacement, no swept radius
     const steps = Math.round(3000 * (1 / 60) / dt);
@@ -170,6 +183,9 @@ test('C-1: parked tank contacts are speed-invariant (forward=0 gets no swept rad
     const t = makeTuning();
     t.set('tank.speed', 1); t.set('tank.damage', 20);
     t.set('wave.size', 20); t.set('wave.dripRate', 0.05); t.set('enemy.speed', 1.0);
+    // This test is about contact radius, not wave timing: skip the build phase
+    // so its pinned kill count measures the thing it claims to measure.
+    t.set('wave.buildTime', 0);
     const wCheck = makeWorld({ seed: 3, tuning: t });
     assert.ok(
       Math.abs(wCheck.tankContactRadius - 0.027) < 0.002,
@@ -201,6 +217,9 @@ test('C4 latch — tankHits is an event count, not inflated by low damage (NEW-3
     // lethal damage (damage=20 > enemy.hp=5): critter dies on first contact
     t.set('tank.damage', damage);
     t.set('wave.size', 20); t.set('wave.dripRate', 0.05); t.set('enemy.speed', 1.0);
+    // This test is about contact radius, not wave timing: skip the build phase
+    // so its pinned kill count measures the thing it claims to measure.
+    t.set('wave.buildTime', 0);
     const w = makeWorld({ seed: 3, tuning: t });
     for (let i = 0; i < 3000; i++) w.tick(1 / 60, { forward: 0, turn: 0, fire: false });
     return w.telemetry.data.tankHits;

@@ -45,7 +45,7 @@ export type WavePlan = { wave: number; count: number; hp: number; events: SpawnE
 export function hpFor(type: string, waveHp: number): number {
   return waveHp * (ENEMY_BY_TYPE.get(type)?.hp ?? 1);
 }
-export type WaveState = 'idle' | 'spawning' | 'engaged' | 'breathing';
+export type WaveState = 'building' | 'idle' | 'spawning' | 'engaged' | 'breathing';
 
 export type WaveEngine = {
   state: WaveState;
@@ -112,7 +112,11 @@ export function planWave(wave: number, tuning: TuningStore, rng: Rng, gates: num
 }
 
 export function makeWaveEngine(tuning: TuningStore, rng: Rng, gates: number[]): WaveEngine {
-  let state: WaveState = 'idle';
+  // Starts in 'building', not mid-fight. You begin a run holding credit with
+  // nowhere to have spent it; a wave that lands immediately reads as the game
+  // starting without you. Both references open with a build phase.
+  let state: WaveState = 'building';
+  let buildLeft = tuning.get('wave.buildTime');
   let waveNum = 0;
   let currentPlan: WavePlan | null = null;
   let spawnCursor = 0;   // index into currentPlan.events, next event to fire
@@ -127,10 +131,17 @@ export function makeWaveEngine(tuning: TuningStore, rng: Rng, gates: number[]): 
     state = 'spawning';
   }
 
-  // Kick off wave 1 immediately
-  startNextWave();
-
+  // Wave 1 waits for the build phase. If buildTime is 0 the very first tick
+  // starts it, so the lever's floor still behaves like the old immediate start.
   function tick(dt: number, ctx: { enemiesAlive: number; onSpawn: (gate: number, hp: number, type: string) => void }): void {
+    if (state === 'building') {
+      // Read LIVE so dragging the lever during a build phase takes effect —
+      // capturing it at construction is exactly the bug the rig exists to catch.
+      buildLeft = Math.min(buildLeft, tuning.get('wave.buildTime'));
+      buildLeft -= dt;
+      if (buildLeft <= 0) startNextWave();
+      return;
+    }
     if (state === 'idle') return;
 
     if (state === 'spawning') {
