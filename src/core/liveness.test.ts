@@ -4,6 +4,7 @@ import { makeTuning } from './tuning/store.ts';
 import { makeWorld } from './sim/world.ts';
 import { LEVERS } from './tuning/schema.ts';
 import { nearestFrontierWall } from './sphere/dungeon.ts';
+import { patrolInput } from './sim/runner.ts';
 
 // Render-only levers: they cannot move sim telemetry by design, so the
 // diff-the-telemetry gate below cannot judge them. They are NOT untested —
@@ -93,13 +94,9 @@ function runWith(overrides: Record<string, number>, seed = 42, ticks = 3000): Re
   // Towers stand on high ground only; the heart itself is open floor.
   w.placeTower(nearestFrontierWall(w.mesh, w.dungeon, w.dungeon.heart));
   for (let i = 0; i < ticks; i++) {
-    // Fire is HELD, not pulsed. M0c-2 gave the tank heat and lockout, which
-    // exist precisely to make sustained fire self-limiting — a harness that
-    // fires 1 tick in 5 adds 0.2 heat/s against 1.12/s of cooling, so heat
-    // never accumulates and both heat levers read dead. Holding the trigger
-    // tests them inside their domain, and lockout keeps it from being
-    // degenerate.
-    w.tick(1 / 60, { forward: (i % 120) < 60 ? 1 : -1, turn: Math.sin(i / 30), fire: true });
+    // Shares the sweep's scripted session so the two harnesses cannot drift
+    // apart. It aims and holds fire — see patrolInput for why both matter.
+    w.tick(1 / 60, patrolInput(i, w));
   }
   return w.telemetry.summary();
 }
