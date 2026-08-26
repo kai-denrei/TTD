@@ -46,10 +46,15 @@ export type RunResult = {
 
 const IDLE: TankInput = { forward: 0, turn: 0, fire: false };
 
-/** The scripted session scripts/sweep.ts and liveness.test.ts already use.
- *  Reproduced exactly so numbers stay comparable across this refactor. */
+/** A scripted session: drive back and forth, sweep the heading, hold fire.
+ *
+ *  Fire is HELD rather than pulsed since M0c-2. The tank gained heat and
+ *  lockout, which make sustained fire self-limiting — so holding the trigger is
+ *  both the realistic stress and the only way the heat levers are exercised at
+ *  all. Before that change this pulsed 1 tick in 5, which added heat far slower
+ *  than it cooled. */
 function patrolInput(k: number): TankInput {
-  return { forward: k % 120 < 60 ? 1 : -1, turn: Math.sin(k / 30), fire: k % 5 === 0 };
+  return { forward: k % 120 < 60 ? 1 : -1, turn: Math.sin(k / 30), fire: true };
 }
 
 export function runHeadless(spec: RunSpec): RunResult {

@@ -175,6 +175,27 @@ export const LEVERS: readonly Lever[] = [
     help: 'Seconds between tank shots. Lower = faster.',
   },
   {
+    key: 'tank.fireArc',
+    group: 'player',
+    label: 'Tank fire arc (°)',
+    min: 10, max: 180, step: 5, value: 45,
+    help: 'How far off the barrel the tank can hit, in degrees either side. Below M0c-2 the tank fired in every direction and the barrel was decoration, which is why steering felt pointless. 180 reproduces that old behaviour, so the lever\'s own top end is the migration path rather than a cliff.',
+  },
+  {
+    key: 'tank.heatMax',
+    group: 'player',
+    label: 'Tank heat max (s)',
+    min: 0.5, max: 6.0, step: 0.1, value: 2.4,
+    help: 'Seconds of continuous fire before the guns lock out. The PoC\'s value. The point is that you cannot hold the trigger: tank damage becomes a resource you spend rather than a constant, which is the same idea as the orbital strike\'s commit ritual in vision §6.4.',
+  },
+  {
+    key: 'tank.coolRate',
+    group: 'player',
+    label: 'Tank cool rate (/s)',
+    min: 0.2, max: 4.0, step: 0.1, value: 1.4,
+    help: 'Heat shed per second while not firing. With the PoC\'s defaults (2.4 max, 1.4 cool) a full lockout lasts about 1.7 s — long enough to feel, short enough not to be a punishment.',
+  },
+  {
     key: 'tank.range',
     group: 'player',
     label: 'Tank range',

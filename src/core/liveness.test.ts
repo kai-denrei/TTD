@@ -60,6 +60,19 @@ const COMPANION_OVERRIDES: Record<string, Record<string, number>> = {
   // documents. The lever's upper half was always this marginal; the shift
   // merely stopped hiding it.
   'tower.rate':   { 'tower.damage': 20 },
+  // M0c-2: at default offence NOTHING dies above ~10 HP — measured, enemy.hp=20
+  // yields exactly 0 kills — so the upper half of both HP levers compares zero
+  // against zero. Raising both damage levers puts kills back on the board so
+  // the HP lever under test is what moves the needle.
+  'enemy.hp':      { 'tower.damage': 20, 'tank.damage': 20 },
+  // hpGrowth needs a NARROWER band than enemy.hp does, and for the opposite
+  // reason. Too little damage and nothing dies at any HP; too much and
+  // everything is one-shot, so growing HP changes nothing either. Measured:
+  // live at damage 6 and 8, dead at 10 and above. 7 is the centre of that band
+  // — chosen rather than an edge value because a lever sitting at the edge of
+  // its observable region goes dead on any unrelated RNG shift, which is how
+  // tower.rate died.
+  'wave.hpGrowth': { 'tower.damage': 7, 'tank.damage': 7 },
 };
 
 // NEW-B: Levers that legitimately saturate before their declared max.
@@ -78,7 +91,13 @@ function runWith(overrides: Record<string, number>, seed = 42, ticks = 3000): Re
   // Towers stand on high ground only; the heart itself is open floor.
   w.placeTower(nearestFrontierWall(w.mesh, w.dungeon, w.dungeon.heart));
   for (let i = 0; i < ticks; i++) {
-    w.tick(1 / 60, { forward: (i % 120) < 60 ? 1 : -1, turn: Math.sin(i / 30), fire: i % 5 === 0 });
+    // Fire is HELD, not pulsed. M0c-2 gave the tank heat and lockout, which
+    // exist precisely to make sustained fire self-limiting — a harness that
+    // fires 1 tick in 5 adds 0.2 heat/s against 1.12/s of cooling, so heat
+    // never accumulates and both heat levers read dead. Holding the trigger
+    // tests them inside their domain, and lockout keeps it from being
+    // degenerate.
+    w.tick(1 / 60, { forward: (i % 120) < 60 ? 1 : -1, turn: Math.sin(i / 30), fire: true });
   }
   return w.telemetry.summary();
 }

@@ -14,6 +14,10 @@ import type { Critter } from './critters.ts';
 // ---- Public types -----------------------------------------------------------
 
 export type Tank = {
+  /** Seconds of accumulated fire. At tank.heatMax the guns lock out. */
+  heat: number;
+  /** True while cooling from a lockout; no shots are produced. */
+  lockedOut: boolean;
   pos: Vec3;
   cell: number;
   heading: Vec3;
@@ -43,6 +47,8 @@ export function makeTank(pos: Vec3, cell: number): Tank {
     cooldown: 0,
     hp: 100,
     hits: 0,
+    heat: 0,
+    lockedOut: false,
   };
 }
 
@@ -105,20 +111,53 @@ export function stepTank(
   // ── Fire cooldown ──────────────────────────────────────────────────────────
   if (tank.cooldown > 0) tank.cooldown -= dt;
 
+  // ── Heat and lockout ───────────────────────────────────────────────────────
+  // The PoC runs twin lasers with a heat budget: sustained fire locks the guns
+  // out until they cool. The point is that YOU CANNOT HOLD THE TRIGGER, so tank
+  // damage is a resource you spend rather than a constant — the same idea as
+  // the orbital strike's commit ritual in vision §6.4.
+  const heatMax = tuning.get('tank.heatMax');
+  const coolRate = tuning.get('tank.coolRate');
+  const wantsToFire = input.fire && !tank.lockedOut;
+
+  if (wantsToFire) {
+    tank.heat += dt;
+    if (tank.heat >= heatMax) {
+      tank.heat = heatMax;
+      tank.lockedOut = true;
+    }
+  } else {
+    tank.heat = Math.max(0, tank.heat - coolRate * dt);
+    // Only clear the lockout once fully cool. Releasing it the instant heat
+    // dips below max would let a player tap-fire straight through the limit,
+    // which removes the reason the limit exists.
+    if (tank.heat <= 0) tank.lockedOut = false;
+  }
+
   const events: TankDamageEvent[] = [];
-  if (input.fire && tank.cooldown <= 0) {
-    // Fire at nearest alive critter within range (live lever: tank.range)
+  if (wantsToFire && tank.cooldown <= 0) {
+    // Fire along the BARREL, not in every direction. Until M0c-2 the tank shot
+    // the nearest critter regardless of facing, which made the barrel
+    // decoration and steering pointless. A target now has to be within
+    // tank.fireArc of the heading.
     const fireRange = tuning.get('tank.range');
+    const cosArc = Math.cos((tuning.get('tank.fireArc') * Math.PI) / 180);
+    const heading = normalize(tangentProject(tank.heading, normalize(tank.pos)));
+
     let target: Critter | null = null;
     let bestDist = Infinity;
     for (const c of critters) {
       if (!c.alive) continue;
-      // Simple range check (tank fires in all directions in M0)
       const dx = c.pos[0] - tank.pos[0];
       const dy = c.pos[1] - tank.pos[1];
       const dz = c.pos[2] - tank.pos[2];
       const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (d > fireRange) continue;
+      if (d > fireRange || d <= 1e-9) continue;
+      // Compare against the heading on the tangent plane: the raw chord to a
+      // nearby critter dips below the surface, which would bias every angle.
+      const toward = normalize(tangentProject([dx, dy, dz], normalize(tank.pos)));
+      const cos = toward[0] * heading[0] + toward[1] * heading[1] + toward[2] * heading[2];
+      if (cos < cosArc) continue;
       if (d < bestDist || (d === bestDist && target !== null && c.id < target.id)) {
         bestDist = d;
         target = c;
