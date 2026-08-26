@@ -15,11 +15,23 @@ import { makeRenderTarget, readRenderState } from './render/bindings.ts';
 import { makeLoop } from './app/loop.ts';
 import { makeCameraRig } from './app/cameras/registry.ts';
 import { makeInput } from './app/input.ts';
+import { makeHud } from './ui/hud.ts';
+import { installGate } from './ui/admin/gate.ts';
+import { makeDashboard } from './ui/admin/dashboard.ts';
+import { parsePresetParam } from './ui/admin/presets.ts';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene');
 if (!canvas) throw new Error('#scene canvas missing');
 
+const app = document.querySelector<HTMLElement>('#app');
+if (!app) throw new Error('#app missing');
+
 const tuning = makeTuning();
+// Applied BEFORE makeWorld so the first tick already sees it — applying after
+// construction would leave one tick of default tuning in every shared link.
+const urlPreset = parsePresetParam(window.location.search);
+if (urlPreset !== null) tuning.import(urlPreset);
+
 const world = makeWorld({ seed: 7, tuning });
 world.placeTower(world.dungeon.heart);
 
@@ -73,6 +85,20 @@ const loop = makeLoop({
   done: () => world.heartDied,
 });
 
+const hud = makeHud(app);
+
+// Admin Mode is a leaf: nothing in core/ or render/ imports it, and the
+// dashboard is only constructed once the gate actually opens.
+let dashboard: ReturnType<typeof makeDashboard> | null = null;
+const gate = installGate(app);
+gate.onOpen(() => {
+  if (dashboard !== null) return;
+  dashboard = makeDashboard(tuning, app);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Backquote') dashboard?.toggle();
+  });
+});
+
 const renderTarget = makeRenderTarget();
 let last = performance.now();
 
@@ -100,6 +126,9 @@ function frame(now: number): void {
   readRenderState(tuning, renderTarget);
 
   units.sync(world);
+  hud.sync(world);
+  dashboard?.sync(world);
+  if (loop.halted) hud.showRunOver(world.telemetry.summary());
 
   const tp = world.tank.pos;
   const tl = Math.hypot(tp[0], tp[1], tp[2]) || 1;

@@ -48,3 +48,80 @@ html, body {
 html, body, #app { height: 100%; margin: 0; background: #05070c; overflow: hidden; }
 #scene { display: block; width: 100%; height: 100%; touch-action: none; }
 .boot { display: none; }
+
+/* ── player HUD ─────────────────────────────────────────────────────────── */
+.hud {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  display: flex; gap: 14px; justify-content: center;
+  padding: 8px 12px; pointer-events: none;
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #9fb3d9; text-shadow: 0 0 6px #05070c;
+}
+.hud b { color: #e6edfb; }
+.runover {
+  position: fixed; inset: 0; z-index: 15;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  background: rgba(5, 7, 12, 0.82); color: #e6edfb; pointer-events: none;
+  font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.runover h2 { margin: 0; font-size: 22px; letter-spacing: 2px; }
+.runover .sub { color: #6b7ea3; }
+
+/* ── Admin Mode ─────────────────────────────────────────────────────────────
+   A tool, not a game surface: density over discoverability. */
+.admin {
+  position: fixed; inset: 0; z-index: 20;
+  display: flex; flex-direction: column;
+  background: rgba(6, 9, 16, 0.96); color: #9fb3d9;
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.admin[hidden] { display: none; }
+.admin-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-bottom: 1px solid #22304d; color: #e6edfb;
+}
+.admin-head b { flex: 1; letter-spacing: 1px; }
+.admin-body { flex: 1; overflow-y: auto; padding: 6px 10px 48px; }
+.admin-group { border-bottom: 1px solid #16203a; padding: 4px 0; }
+.admin-group > summary {
+  cursor: pointer; color: #cfe0ff; padding: 4px 0; letter-spacing: 1px;
+  display: flex; align-items: center; gap: 8px;
+}
+.admin-row {
+  display: grid; grid-template-columns: 1fr 1.3fr 54px;
+  align-items: center; gap: 8px; padding: 3px 0 3px 10px;
+}
+.admin-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-value { text-align: right; color: #5aa0ff; }
+.admin input[type="range"] { width: 100%; accent-color: #5aa0ff; }
+.admin button {
+  background: #16203a; color: #cfe0ff; border: 1px solid #2f3d5c;
+  border-radius: 3px; padding: 3px 8px; font: inherit; cursor: pointer;
+}
+.admin button:hover { background: #1d2b4a; }
+.admin-mini { margin-left: auto; padding: 1px 6px; }
+.admin-text, .admin select {
+  background: #0d1424; color: #cfe0ff; border: 1px solid #2f3d5c;
+  border-radius: 3px; padding: 3px 6px; font: inherit;
+}
+.admin-presets {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid #22304d;
+}
+.admin-presets textarea {
+  flex: 1 1 100%; background: #0d1424; color: #7ee0a8;
+  border: 1px solid #2f3d5c; border-radius: 3px; font: inherit; padding: 4px 6px;
+}
+.admin-tel { display: flex; gap: 14px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid #22304d; }
+.admin-tel-pane { flex: 1 1 220px; }
+.admin-tel-h { color: #cfe0ff; letter-spacing: 1px; margin-bottom: 4px; }
+.admin-tel-body { display: grid; grid-template-columns: 1fr auto; gap: 1px 10px; }
+.admin-tel-body .v { color: #7ee0a8; text-align: right; }
+.admin-compare {
+  padding: 8px 0; display: flex; flex-wrap: wrap; gap: 6px;
+  align-items: flex-start; border-bottom: 1px solid #22304d;
+}
+.cmp-table { flex: 1 1 100%; display: grid; grid-template-columns: 1.5fr 1fr 1.5fr; gap: 1px 10px; }
+.admin-note { flex: 1 1 100%; color: #6b7ea3; line-height: 1.5; }
+.cmp-h { color: #cfe0ff; border-bottom: 1px solid #22304d; }
+.cmp-d { color: #5aa0ff; }
