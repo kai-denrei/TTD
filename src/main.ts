@@ -1,22 +1,33 @@
-// main.ts — the shell. Boots the app, owns the canvas and the loop.
+// main.ts — the shell entry point.
 //
 // Architectural invariant: src/core/ never imports three.js. The brain is
-// testable headless (`npm test`); this file and everything under render/ is
-// the thin layer that draws it. That separation is the structural fix for
-// what went wrong in the PoC, where a 3,870-line tab fused sim and render.
+// tested headless (`npm test`); this file and everything under render/ is the
+// thin layer that draws it. That separation is the structural fix for what
+// went wrong in the PoC, where a 3,870-line tab fused sim and render.
 
-import { stream } from './core/sim/rng.ts';
+import { makeWorld } from './core/sim/world.ts';
+import { makeTuning } from './core/tuning/store.ts';
+import { makeStage } from './render/scene.ts';
+import { makeBoard } from './render/board.ts';
+import { makeRenderTarget, readRenderState } from './render/bindings.ts';
 
-const app = document.querySelector<HTMLDivElement>('#app');
-if (!app) throw new Error('#app missing');
+const canvas = document.querySelector<HTMLCanvasElement>('#scene');
+if (!canvas) throw new Error('#scene canvas missing');
 
-// M0 placeholder — the board, tuning rig and telemetry land here next.
-const seed = 7;
-const rng = stream(seed, 'boot');
-const boot = document.createElement('div');
-boot.className = 'boot';
-boot.innerHTML =
-  `<b>TTD</b><div>tank tower defense</div>` +
-  `<div>scaffold · seed ${seed} · ${rng().toFixed(6)}</div>` +
-  `<div>M0: the tuning rig</div>`;
-app.appendChild(boot);
+const tuning = makeTuning();
+const world = makeWorld({ seed: 7, tuning });
+
+const stage = makeStage(canvas);
+stage.scene.add(makeBoard(world.mesh, world.dungeon));
+
+const renderTarget = makeRenderTarget();
+
+function frame(): void {
+  // LIVENESS: read every render lever through tuning.get() on every frame.
+  // Hoisting this out of the loop is the exact bug the rig exists to prevent.
+  readRenderState(tuning, renderTarget);
+  stage.postfx.applyBloom(renderTarget.bloom);
+  stage.postfx.render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
