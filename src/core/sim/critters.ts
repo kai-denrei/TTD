@@ -148,7 +148,7 @@ export function spawnCritter(
 }
 
 /** effectiveSpeed reads all levers live — never cached. */
-export function effectiveSpeed(c: Critter, tuning: TuningStore): number {
+export function effectiveSpeed(c: Critter, tuning: TuningStore, aura = 1): number {
   // slowFactor is the slowfield tower's contribution. It multiplies rather
   // than clamping, so a slow stacks with a hit reaction instead of one silently
   // overriding the other — a slowed critter that then gets hit by an
@@ -158,14 +158,45 @@ export function effectiveSpeed(c: Critter, tuning: TuningStore): number {
   // retimes the whole board while a prime stays slower than a phage at every
   // setting. The roster's internal spread is the design; the lever is the dial.
   const typeSpeed = ENEMY_BY_TYPE.get(c.type)?.speed ?? 1;
-  return tuning.get('enemy.speed') * typeSpeed * c.envValue * c.reactMult * c.slowFactor;
+  return tuning.get('enemy.speed') * typeSpeed * aura * c.envValue * c.reactMult * c.slowFactor;
 }
 
 /** Advance one critter. Returns 'arrived' when it reaches the heart. */
+/** Speed multiplier a critter gets from nearby aura carriers.
+ *
+ *  A crowd of independent walkers moves like a conveyor belt; an aura leader is
+ *  what makes it move like a threat with intent. Vision §6.2 lists this as a
+ *  named stressor, and HokorobiTawaa's jellyfish is the reference: kill the
+ *  carrier and the pack visibly slows, which turns a swarm into a target
+ *  PRIORITY decision rather than a wall of HP.
+ *
+ *  Deliberately not cumulative: two carriers give the same boost as one, or a
+ *  dense pack would compound into something unkillable that no tower placement
+ *  answers. */
+export function auraBoost(c: Critter, all: readonly Critter[]): number {
+  let best = 1;
+  for (const other of all) {
+    if (other === c || !other.alive) continue;
+    const spec = ENEMY_BY_TYPE.get(other.type);
+    const aura = spec?.auraSpeed;
+    if (aura === undefined || aura <= 1) continue;
+    const dx = other.pos[0] - c.pos[0];
+    const dy = other.pos[1] - c.pos[1];
+    const dz = other.pos[2] - c.pos[2];
+    if (Math.sqrt(dx * dx + dy * dy + dz * dz) > (spec?.auraRange ?? 0)) continue;
+    if (aura > best) best = aura;
+  }
+  return best;
+}
+
 export function stepCritter(
   c: Critter,
   dt: number,
-  ctx: { mesh: SphereMesh; dungeon: Dungeon; tuning: TuningStore; rng: Rng; now: number },
+  ctx: {
+    mesh: SphereMesh; dungeon: Dungeon; tuning: TuningStore; rng: Rng; now: number;
+    /** Speed multiplier from nearby aura carriers; 1 when there are none. */
+    aura?: number;
+  },
 ): 'moving' | 'arrived' {
   if (!c.alive) return 'moving';
 
@@ -247,7 +278,7 @@ export function stepCritter(
     c.prog = 0;
   }
 
-  const speed = effectiveSpeed(c, tuning);
+  const speed = effectiveSpeed(c, tuning, ctx.aura ?? 1);
   let budget = speed * dt; // world-distance budget this tick
 
   // Carry leftover distance across multiple cell arrivals in one tick

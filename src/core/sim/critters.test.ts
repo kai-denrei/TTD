@@ -4,7 +4,7 @@ import { generateSphereMesh } from '../sphere/grid.ts';
 import { generateDungeon, BLOCKED } from '../sphere/dungeon.ts';
 import { makeTuning } from '../tuning/store.ts';
 import { stream } from './rng.ts';
-import { spawnCritter, stepCritter, effectiveSpeed, hitCritter } from './critters.ts';
+import { spawnCritter, stepCritter, effectiveSpeed, hitCritter, auraBoost } from './critters.ts';
 
 const MESH = generateSphereMesh({ seed: 7, points: 600, relaxIters: 40 });
 const D = generateDungeon(MESH, { seed: 7, rooms: 12, roomRadius: 4,
@@ -87,4 +87,57 @@ test('hitCritter returns true exactly when hp runs out', () => {
   assert.equal(hitCritter(c, 1, t), false);
   assert.equal(hitCritter(c, 1, t), true);
   assert.equal(c.alive, false);
+});
+
+// --- aura leader ------------------------------------------------------------
+// A crowd of independent walkers moves like a conveyor belt. An aura carrier is
+// what makes it move like a pack — and makes killing the RIGHT one matter more
+// than killing the nearest one.
+
+test('an aura carrier speeds up a nearby ally', () => {
+  const t = makeTuning();
+  const ally = spawnCritter(0, D.spawn, t, stream(9, 'a'), 0, 1, 'phage');
+  const carrier = spawnCritter(1, D.spawn, t, stream(9, 'b'), 0, 1, 'jellyfish');
+  ally.pos = [0, 0, 1];
+  carrier.pos = [0.01, 0, 1]; // well inside the aura radius
+  assert.ok(auraBoost(ally, [ally, carrier]) > 1, 'ally got no boost from the carrier');
+});
+
+test('the aura does not reach across the board', () => {
+  const t = makeTuning();
+  const ally = spawnCritter(0, D.spawn, t, stream(9, 'a'), 0, 1, 'phage');
+  const carrier = spawnCritter(1, D.spawn, t, stream(9, 'b'), 0, 1, 'jellyfish');
+  ally.pos = [0, 0, 1];
+  carrier.pos = [0, 1, 0]; // a quarter of the way round the sphere
+  assert.equal(auraBoost(ally, [ally, carrier]), 1);
+});
+
+test('a dead carrier grants nothing — killing it visibly slows the pack', () => {
+  const t = makeTuning();
+  const ally = spawnCritter(0, D.spawn, t, stream(9, 'a'), 0, 1, 'phage');
+  const carrier = spawnCritter(1, D.spawn, t, stream(9, 'b'), 0, 1, 'jellyfish');
+  ally.pos = [0, 0, 1];
+  carrier.pos = [0.01, 0, 1];
+  carrier.alive = false;
+  assert.equal(auraBoost(ally, [ally, carrier]), 1);
+});
+
+test('two carriers are no better than one — auras never compound', () => {
+  // Cumulative auras would let a dense pack multiply into something no tower
+  // placement answers.
+  const t = makeTuning();
+  const ally = spawnCritter(0, D.spawn, t, stream(9, 'a'), 0, 1, 'phage');
+  const c1 = spawnCritter(1, D.spawn, t, stream(9, 'b'), 0, 1, 'jellyfish');
+  const c2 = spawnCritter(2, D.spawn, t, stream(9, 'c'), 0, 1, 'jellyfish');
+  ally.pos = [0, 0, 1];
+  c1.pos = [0.01, 0, 1];
+  c2.pos = [0, 0.01, 1];
+  assert.equal(auraBoost(ally, [ally, c1, c2]), auraBoost(ally, [ally, c1]));
+});
+
+test('a critter does not aura itself', () => {
+  const t = makeTuning();
+  const solo = spawnCritter(0, D.spawn, t, stream(9, 'a'), 0, 1, 'jellyfish');
+  solo.pos = [0, 0, 1];
+  assert.equal(auraBoost(solo, [solo]), 1);
 });

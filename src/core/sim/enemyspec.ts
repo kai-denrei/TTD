@@ -58,6 +58,13 @@ export type EnemySpec = {
   /** Wanders off the direct line to the core, so it cannot be intercepted by
    *  aiming where it is going. */
   erratic?: boolean;
+  /** Speed multiplier this type grants to nearby allies. A crowd of independent
+   *  walkers moves like a conveyor belt; an aura carrier is what makes it move
+   *  like a pack with intent — and makes killing the RIGHT one matter more than
+   *  killing the nearest one. Vision §6.2 names this as a stressor. */
+  auraSpeed?: number;
+  /** World-unit radius the aura reaches. */
+  auraRange?: number;
   /** HP per second recovered after REGEN_DELAY seconds unhit. */
   regen?: number;
   /** Speed multiplier (<1) held for HIT_REACT_DUR after taking a hit. */
@@ -105,7 +112,11 @@ export const ENEMIES: readonly EnemySpec[] = [
     type: 'jellyfish', label: 'THE JELLYFISH',
     hp: 1, speed: 0.95, size: 0.45, heartDmg: 1, bounty: 14, color: 0xff5fd0,
     rammable: true,
-    help: 'A faster amoeba for slightly less money. Together they set the price of a wave you can safely ignore.',
+    // The aura carrier. Cheap and fragile on its own, but it drags everything
+    // around it forward — so the correct answer is to shoot the weakest thing
+    // on screen first, which is the opposite of every other wave's lesson.
+    auraSpeed: 1.4, auraRange: 0.14,
+    help: 'Harmless alone, and the most dangerous thing in a pack: it hurries every ally near it. Kill it first and the pack visibly slows.',
   },
   {
     type: 'gslime', label: 'GREEN SLIME',

@@ -49,7 +49,7 @@ import type { WorldEvent } from './events.ts';
 import type { Rng } from './rng.ts';
 import { stream } from './rng.ts';
 import type { Critter } from './critters.ts';
-import { spawnCritter, stepCritter, hitCritter } from './critters.ts';
+import { spawnCritter, stepCritter, hitCritter, auraBoost } from './critters.ts';
 import type { WaveEngine } from './waves.ts';
 import { makeWaveEngine } from './waves.ts';
 import type { Tower } from './towers.ts';
@@ -279,7 +279,10 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     const arrivedIds = new Set<number>();
     for (const c of critters) {
       if (!c.alive) continue;
-      const result = stepCritter(c, dt, { mesh, dungeon, tuning, rng: crittersRng, now: elapsed });
+      const result = stepCritter(c, dt, {
+        mesh, dungeon, tuning, rng: crittersRng, now: elapsed,
+        aura: auraBoost(c, critters),
+      });
       if (result === 'arrived') {
         arrivedIds.add(c.id);
       }
@@ -361,7 +364,12 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
         telemetry.heartHit();
         events.emit({ kind: 'heartHit', at: mesh.centers[dungeon.heart] ?? [0, 1, 0] });
         if (!tuning.flag('god.heartInvulnerable')) {
-          heartHp -= 1;
+          // Per-type damage: a boss costs three hearts, a phage one. Uniform
+          // leak cost would make every leak equally bad, which erases the
+          // reason to prioritise one lane over another when you cannot hold
+          // both — and choosing which leak to accept is most of the tension.
+          const dmg = ENEMY_BY_TYPE.get(c.type)?.heartDmg ?? 1;
+          heartHp = Math.max(0, heartHp - dmg);
           if (heartHp === 0) telemetry.recordHeartDeath(elapsed);
         }
       }
