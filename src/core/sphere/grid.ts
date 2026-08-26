@@ -600,7 +600,7 @@ export function generateSphereMesh(opts: {
   const centers: Vec3[] = quads.map(q =>
     normalize(mean(q.map(vi => vertices[vi]!))),
   );
-  const normals: Vec3[] = centers; // on a unit sphere, centre == outward normal
+  const normals: Vec3[] = centers.slice(); // copy: on a unit sphere normal == centre, but they must be independent references
 
   // Adjacency: quads sharing an edge are adjacent
   const edgeToQuad = new Map<string, number[]>();
