@@ -6,8 +6,7 @@
 // The simulation runs headlessly at speed — no renderer, no wall-clock.
 // core/ is never touched; this file only consumes its public API.
 
-import { makeWorld } from '../src/core/sim/world.ts';
-import { makeTuning } from '../src/core/tuning/store.ts';
+import { runHeadless } from '../src/core/sim/runner.ts';
 import { LEVERS } from '../src/core/tuning/schema.ts';
 
 const [key, lo, hi, steps] = [process.argv[2]!, +process.argv[3]!, +process.argv[4]!, +process.argv[5]!];
@@ -31,14 +30,12 @@ for (let i = 0; i < steps; i++) {
   if (v < leverSchema.min || v > leverSchema.max) {
     console.warn(`WARNING: sweep value ${v.toFixed(3)} for "${key}" is outside declared range [${leverSchema.min}, ${leverSchema.max}]. t.set() will clamp — this row duplicates an adjacent row.`);
   }
-  const t = makeTuning(); t.set(key, v);
-  const w = makeWorld({ seed: 42, tuning: t });
-  w.placeTower(w.dungeon.heart);
-  for (let k = 0; k < 6000; k++) {
-    w.tick(1 / 60, { forward: (k % 120) < 60 ? 1 : -1, turn: Math.sin(k / 30), fire: k % 5 === 0 });
-  }
-  rows.push({ [key]: +v.toFixed(3), ...w.telemetry.summary() });
+  // runHeadless owns what "a comparable run" means, including truncation at
+  // heart death. The sweep does not re-derive it; see core/sim/runner.ts.
+  const r = runHeadless({ seed: 42, preset: `${key}=${v}`, maxTicks: 6000, input: 'patrol', towers: 'heart' });
+  rows.push({ [key]: +v.toFixed(3), ...r.summary });
 }
-// survivedFor: elapsed when heart died (or total elapsed if survived).
-// Rows where survivedFor << elapsed are measuring a dead game — compare with caution.
+// Runs truncate at heart death, so every row measures a live game only.
+// survivedFor is therefore the run length, not a warning flag. Before the
+// runner existed, rows ran a flat 100s and 2-63% of each was post-mortem.
 console.table(rows);
