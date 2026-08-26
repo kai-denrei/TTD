@@ -33,15 +33,24 @@
 
 import type { TuningStore } from '../tuning/store.ts';
 import type { Rng } from './rng.ts';
+import { typesByWave, ENEMY_BY_TYPE } from './enemyspec.ts';
 
-export type SpawnEvent = { at: number; gate: number };
+export type SpawnEvent = { at: number; gate: number; type: string };
 export type WavePlan = { wave: number; count: number; hp: number; events: SpawnEvent[] };
+
+/** HP for one spawn: the wave curve times the type's own multiplier. Keeping
+ *  the two separate means enemy.hp and wave.hpGrowth still tune the whole board
+ *  while the roster keeps its internal spread — a prime is always tankier than
+ *  a phage, at every difficulty. */
+export function hpFor(type: string, waveHp: number): number {
+  return waveHp * (ENEMY_BY_TYPE.get(type)?.hp ?? 1);
+}
 export type WaveState = 'idle' | 'spawning' | 'engaged' | 'breathing';
 
 export type WaveEngine = {
   state: WaveState;
   wave: number;
-  tick(dt: number, ctx: { enemiesAlive: number; onSpawn: (gate: number, hp: number) => void }): void;
+  tick(dt: number, ctx: { enemiesAlive: number; onSpawn: (gate: number, hp: number, type: string) => void }): void;
   plan(): WavePlan | null;
   timeToNext(): number;
 };
@@ -80,12 +89,24 @@ export function planWave(wave: number, tuning: TuningStore, rng: Rng, gates: num
     prev = clamped;
   }
 
-  // Assign gates round-robin
+  // Assign gates round-robin, and pick a TYPE per spawn.
+  //
+  // Composition follows the reference ladder: wave N draws from the first N
+  // introduced types, with the NEWEST type as the headline and older ones
+  // sprinkled behind it. That is what makes a wave read as "here is a new idea,
+  // plus what you already know how to fight" rather than as a uniform blob.
+  // Difficulty ramps by which behaviours are present, not by count alone.
+  const pool = typesByWave(wave);
+  const headline = pool[pool.length - 1]!;
   const gateCount = gates.length;
-  const events: SpawnEvent[] = rawTimes.map((at, i) => ({
-    at,
-    gate: gates[i % gateCount]!,
-  }));
+  const events: SpawnEvent[] = rawTimes.map((at, i) => {
+    // Every third spawn is the headline; the rest are drawn from the back
+    // catalogue so early types keep appearing instead of being retired.
+    const type = i % 3 === 0
+      ? headline
+      : pool[Math.floor(rng() * pool.length)] ?? headline;
+    return { at, gate: gates[i % gateCount]!, type };
+  });
 
   return { wave, count, hp, events };
 }
@@ -109,7 +130,7 @@ export function makeWaveEngine(tuning: TuningStore, rng: Rng, gates: number[]): 
   // Kick off wave 1 immediately
   startNextWave();
 
-  function tick(dt: number, ctx: { enemiesAlive: number; onSpawn: (gate: number, hp: number) => void }): void {
+  function tick(dt: number, ctx: { enemiesAlive: number; onSpawn: (gate: number, hp: number, type: string) => void }): void {
     if (state === 'idle') return;
 
     if (state === 'spawning') {
@@ -119,7 +140,7 @@ export function makeWaveEngine(tuning: TuningStore, rng: Rng, gates: number[]): 
       while (spawnCursor < plan.events.length) {
         const evt = plan.events[spawnCursor]!;
         if (waveTime >= evt.at) {
-          ctx.onSpawn(evt.gate, plan.hp);
+          ctx.onSpawn(evt.gate, hpFor(evt.type, plan.hp), evt.type);
           spawnCursor++;
         } else {
           break;

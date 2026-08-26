@@ -44,6 +44,7 @@ import { makeEventBuffer } from './events.ts';
 import { makeEconomy } from './economy.ts';
 import type { Economy } from './economy.ts';
 import { TOWER_BY_KEY, sellRefund } from './towerspec.ts';
+import { ENEMY_BY_TYPE } from './enemyspec.ts';
 import type { WorldEvent } from './events.ts';
 import type { Rng } from './rng.ts';
 import { stream } from './rng.ts';
@@ -120,6 +121,13 @@ const TANK_CONTACT_COOLDOWN = 0.5;
 export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   const { seed, tuning } = opts;
 
+  /** Bounty for killing `c`: the type's own worth, scaled by the eco.bounty
+   *  lever so the whole payout curve stays tunable while a prime keeps paying
+   *  more than a phage. Bounties are FLAT across waves by design — money
+   *  tightens automatically as counts rise. */
+  const bountyFor = (c: Critter): number =>
+    (ENEMY_BY_TYPE.get(c.type)?.bounty ?? 1) * (tuning.get('eco.bounty') / 8);
+
   // ── Static geometry (uses its own named RNG streams internally) ──────────
   const mesh: SphereMesh = generateSphereMesh({ seed, points: MESH_POINTS, relaxIters: MESH_RELAX });
   const dungeon: Dungeon = generateDungeon(mesh, {
@@ -186,7 +194,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   let nextCritterId = 0;
 
   // Pending spawns queued by wave engine callbacks
-  const pendingSpawns: Array<{ gate: number; hp: number }> = [];
+  const pendingSpawns: Array<{ gate: number; hp: number; type: string }> = [];
 
   // ── Towers & tank ────────────────────────────────────────────────────────
   const towers: Tower[] = [];
@@ -238,7 +246,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     const stateBefore = waves.state;
     waves.tick(dt, {
       enemiesAlive: critters.filter((c) => c.alive).length,
-      onSpawn: (gate: number, hp: number) => { pendingSpawns.push({ gate, hp }); },
+      onSpawn: (gate: number, hp: number, type: string) => { pendingSpawns.push({ gate, hp, type }); },
     });
     // Wave-clear timing. The engine enters 'breathing' exactly when the field
     // has drained to its overlap threshold — that transition IS the wave being
@@ -252,8 +260,8 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     }
 
     // ── 3. Spawn pending critters ────────────────────────────────────────────
-    for (const { gate, hp } of pendingSpawns) {
-      const c = spawnCritter(nextCritterId++, gate, tuning, crittersRng, elapsed, hp);
+    for (const { gate, hp, type } of pendingSpawns) {
+      const c = spawnCritter(nextCritterId++, gate, tuning, crittersRng, elapsed, hp, type);
       // Initialize position from mesh
       const gatePos: Vec3 = mesh.centers[gate] ?? [0, 1, 0];
       c.pos = gatePos;
@@ -360,7 +368,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       if (hitCritter(c, h.damage, tuning, elapsed)) {
         const ttk = elapsed - (c.firstHitAt ?? elapsed);
         telemetry.kill('tower', elapsed - c.bornAt, ttk);
-        economy.rewardKill(tuning.get('eco.bounty'));
+        economy.rewardKill(bountyFor(c));
         events.emit({ kind: 'critterDied', at: c.pos, by: 'tower' });
       }
     }
@@ -373,7 +381,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       if (killed) {
         const ttk = elapsed - (c.firstHitAt ?? elapsed);
         telemetry.kill('tower', elapsed - c.bornAt, ttk);
-        economy.rewardKill(tuning.get('eco.bounty'));
+        economy.rewardKill(bountyFor(c));
         events.emit({ kind: 'critterDied', at: c.pos, by: 'tower' });
       }
     }
@@ -387,7 +395,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       if (killed) {
         const ttk = elapsed - (c.firstHitAt ?? elapsed);
         telemetry.kill('player', elapsed - c.bornAt, ttk);
-        economy.rewardKill(tuning.get('eco.bounty'));
+        economy.rewardKill(bountyFor(c));
         events.emit({ kind: 'critterDied', at: c.pos, by: 'tank' });
       }
     }
@@ -423,7 +431,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
           telemetry.kill('player', elapsed - c.bornAt, ttk);
           // Ramming pays a premium: it is the riskiest way to kill something,
           // since it means putting the tank where the critter already is.
-          economy.rewardKill(tuning.get('eco.bounty'), true);
+          economy.rewardKill(bountyFor(c), true);
           events.emit({ kind: 'critterDied', at: c.pos, by: 'tank' });
         }
       }

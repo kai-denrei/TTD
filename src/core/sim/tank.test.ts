@@ -72,7 +72,7 @@ describe('tank aimed fire — the barrel finally matters', () => {
       dir[0] * Math.sin(a), dir[1] * Math.sin(a), Math.cos(a),
     ];
     const critter = {
-      id: 1, alive: true, hp: 5, cur: 0, next: 0, prog: 0, pos,
+      id: 1, type: 'phage', alive: true, hp: 5, cur: 0, next: 0, prog: 0, pos,
       envValue: 1, envTarget: 1, envLeft: 1, reactMult: 1, reactLeft: 0,
       contactLeft: 0, slowFactor: 1, slowLeft: 0, bornAt: 0, firstHitAt: null,
     };
@@ -107,7 +107,7 @@ describe('tank heat and lockout — you cannot hold the trigger', () => {
     const tank = makeTank([0, 0, 1], 0);
     tank.heading = [1, 0, 0];
     const critter = {
-      id: 1, alive: true, hp: 1e9, cur: 0, next: 0, prog: 0,
+      id: 1, type: 'phage', alive: true, hp: 1e9, cur: 0, next: 0, prog: 0,
       pos: [Math.sin(0.2), 0, Math.cos(0.2)] as [number, number, number],
       envValue: 1, envTarget: 1, envLeft: 1, reactMult: 1, reactLeft: 0,
       contactLeft: 0, slowFactor: 1, slowLeft: 0, bornAt: 0, firstHitAt: null,

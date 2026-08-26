@@ -14,12 +14,16 @@ import { BLOCKED } from '../sphere/dungeon.ts';
 import { sub, len } from '../sphere/vec3.ts';
 import type { Vec3 } from '../sphere/vec3.ts';
 import type { TuningStore } from '../tuning/store.ts';
+import { ENEMY_BY_TYPE } from './enemyspec.ts';
 import type { Rng } from './rng.ts';
 
 // ---- Public type ------------------------------------------------------------
 
 export type Critter = {
   id: number;
+  /** Which EnemySpec this is — drives speed, size, bounty, colour and its
+   *  on-hit behaviour. */
+  type: string;
   alive: boolean;
   hp: number;
   cur: number;      // cell index currently occupying
@@ -110,6 +114,7 @@ export function spawnCritter(
   rng: Rng,
   now: number,
   hpOverride?: number,
+  type = 'phage',
 ): Critter {
   const hp = hpOverride !== undefined ? hpOverride : tuning.get('enemy.hp');
   // Pick initial next: best downhill neighbor of spawn cell.
@@ -121,7 +126,7 @@ export function spawnCritter(
 
   // next will be resolved on first stepCritter call (mesh/dungeon not available here)
   const c: Critter = {
-    id, alive: true, hp,
+    id, type, alive: true, hp,
     cur: cell, next: cell, prog: 0,
     pos: [0, 0, 0],
     envValue: 1, envTarget, envLeft: envPhase,
@@ -142,7 +147,11 @@ export function effectiveSpeed(c: Critter, tuning: TuningStore): number {
   // overriding the other — a slowed critter that then gets hit by an
   // accel-on-hit tower should end up somewhere between, not at whichever
   // system happened to write last.
-  return tuning.get('enemy.speed') * c.envValue * c.reactMult * c.slowFactor;
+  // The type's own speed multiplies the global lever, so enemy.speed still
+  // retimes the whole board while a prime stays slower than a phage at every
+  // setting. The roster's internal spread is the design; the lever is the dial.
+  const typeSpeed = ENEMY_BY_TYPE.get(c.type)?.speed ?? 1;
+  return tuning.get('enemy.speed') * typeSpeed * c.envValue * c.reactMult * c.slowFactor;
 }
 
 /** Advance one critter. Returns 'arrived' when it reaches the heart. */
