@@ -142,11 +142,14 @@ test('C-1: parked tank contacts are speed-invariant (forward=0 gets no swept rad
   const killsMaxSpeed = run(10, 1 / 60);   // tank.speed max
   assert.equal(killsMinSpeed, killsMaxSpeed,
     `parked tank speed-invariance broken: kills at speed=0.5: ${killsMinSpeed}, at speed=10: ${killsMaxSpeed}`);
+  // Baseline pin: confirms the count itself, not just equality — catches radius drift
+  // that would inflate kills without breaking the speed-equality assertion above.
+  assert.equal(killsMinSpeed, 44, `baseline kill count drifted from 44 — radius or critter flow changed`);
   // Same speed, different dt — must be equal (radius should not vary with dt when parked)
-  const kills60fps = run(10, 1 / 60);
+  // Reuse killsMaxSpeed (speed=10, dt=1/60) — avoids re-running the same sim.
   const kills30fps = run(10, 1 / 30);
-  assert.equal(kills60fps, kills30fps,
-    `parked tank dt-invariance broken: kills at dt=1/60: ${kills60fps}, at dt=1/30: ${kills30fps}`);
+  assert.equal(killsMaxSpeed, kills30fps,
+    `parked tank dt-invariance broken: kills at dt=1/60: ${killsMaxSpeed}, at dt=1/30: ${kills30fps}`);
 });
 
 // Guard for NEW-3 — contact latch (TANK_CONTACT_COOLDOWN).
@@ -213,6 +216,19 @@ test('C4 swept-radius floor — fast moving tank still registers contacts (NEW-2
     w.telemetry.data.tankHits > 0,
     `moving tank at speed=10 registered 0 contacts — swept-radius floor removed or broken (bare static radius tunnels at this speed; floor removed: 0 contacts vs 40 with floor)`,
   );
+});
+
+// I-1 regression: heartHits must never exceed HEART_MAX_HP — no post-mortem phantom hits.
+// Before the fix, heartHit() fired even after heartHp reached 0, so leakers that arrive
+// after death accumulate phantom hits (heartHits > HEART_MAX_HP=20). The fix gates the
+// hit on (heartHp > 0). Reviewer-verified values on seed 42, 6000 ticks: heartHits=20, leaks=44.
+test('I-1: heartHits never exceeds HEART_MAX_HP (no post-mortem phantom hits)', () => {
+  const w = makeWorld({ seed: 42, tuning: makeTuning() });
+  w.placeTower(w.dungeon.heart);
+  scripted(w, 6000);
+  assert.equal(w.heartHp, 0, 'heart should have died on this config');
+  assert.ok(w.telemetry.data.leaks > w.telemetry.data.heartHits, 'leaks must outrun hits after death');
+  assert.ok(w.telemetry.data.heartHits <= 20, `heartHits ${w.telemetry.data.heartHits} exceeds HEART_MAX_HP`);
 });
 
 // NEW-A: heart death telemetry

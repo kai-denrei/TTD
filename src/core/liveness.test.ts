@@ -69,15 +69,16 @@ describe('liveness — every sim lever must move the telemetry needle', () => {
     });
 
     // NEW-B: also assert upper-half sensitivity — lever must differ across its top half
-    // (50th percentile vs max). COMPANION_OVERRIDES levers skip: the companion is not
-    // swept with the mid value, contaminating the comparison.
+    // (50th percentile vs max). COMPANION_OVERRIDES are applied to BOTH arms identically,
+    // so they do not contaminate the comparison and upper-half coverage is valid for them.
     // SATURATING levers skip with documented rationale above.
-    if (!SATURATING.has(lever.key) && !COMPANION_OVERRIDES[lever.key]) {
+    if (!SATURATING.has(lever.key)) {
       test(`lever ${lever.key} is live in upper half`, () => {
         if (lever.min >= lever.max) return;
+        const companion = COMPANION_OVERRIDES[lever.key] ?? {};
         const mid = lever.min + (lever.max - lever.min) * 0.5;
-        const lo = runWith({ [lever.key]: mid });
-        const hi = runWith({ [lever.key]: lever.max });
+        const lo = runWith({ ...companion, [lever.key]: mid });
+        const hi = runWith({ ...companion, [lever.key]: lever.max });
         assert.notDeepEqual(lo, hi, `lever ${lever.key} is SATURATED in upper half — add to SATURATING with rationale if this is intentional`);
       });
     }
