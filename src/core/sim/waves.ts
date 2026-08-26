@@ -133,6 +133,14 @@ export function planWave(wave: number, tuning: TuningStore, rng: Rng, gates: num
   //
   // This needs real PORTALS — several spawn points placed around the board,
   // as the PoC has — not a scheduling lever. Until then a wave has one front.
+  //
+  // ATTEMPTED AND REVERTED: gates spread greedily to the far side of the board.
+  // It made the mechanic expressible and made the GAME worse — critters walked
+  // very long paths, so fewer fights happened anywhere near the tank or the
+  // heart, and FIVE levers went dead in liveness (tank.fireRate among them,
+  // because the tank simply stopped meeting anything). Multi-front is not a
+  // gate-placement problem; it needs portals that are near enough to threaten,
+  // plus a tank that starts near what it is defending rather than at the spawn.
   const gateCount = gates.length;
   const events: SpawnEvent[] = rawTimes.map((at, i) => {
     // Every third spawn is the headline; the rest are drawn from the back
