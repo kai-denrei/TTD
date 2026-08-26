@@ -64,3 +64,20 @@ test('core/ never touches the DOM or timers tied to wall-clock', () => {
     }
   }
 });
+
+// Modules under render/ that MUST stay three-free so they remain Node-testable.
+// Their correctness is asserted by node --test; importing three would silently
+// end that, and the erosion would look like an ordinary refactor. core/ gets
+// this guard by recursion — these do not, because they are not under core/.
+const PURE_RENDER = ['bindings.ts', 'geometry.ts'];
+
+test('pure render modules never import three.js', () => {
+  const renderDir = fileURLToPath(new URL('../render/', import.meta.url));
+  for (const name of PURE_RENDER) {
+    const code = stripComments(readFileSync(join(renderDir, name), 'utf8'));
+    assert.ok(
+      !/from\s+['"]three['"]/.test(code) && !/from\s+['"]three\//.test(code),
+      `render/${name} imports three.js but is on the pure list; either keep it pure, or remove it from PURE_RENDER and drop its Node tests`,
+    );
+  }
+});
