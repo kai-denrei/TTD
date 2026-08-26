@@ -9,6 +9,15 @@ import { VitePWA } from 'vite-plugin-pwa';
 // sub-path build via DEPLOY_BASE. vite-plugin-pwa respects base for SW+manifest.
 export default defineConfig({
   base: process.env.DEPLOY_BASE || '/',
+  // TTD owns port 5144, pinned. This machine runs several projects at once and
+  // vite's default 5173 is contested — blueprint-to-life holds it. Without a
+  // pinned port you either load a different project's app at the URL you
+  // remembered, or vite silently walks to 5174/5175 and the URL changes between
+  // runs. strictPort makes a collision an explicit failure instead of a
+  // surprise. 5144 pairs with the 8144 that `npm run serve` already uses for
+  // the built output.
+  server: { port: 5144, strictPort: true },
+  preview: { port: 5145, strictPort: true },
   plugins: [
     {
       // Bump the cache-bust token on every production build. Vite content-hashes

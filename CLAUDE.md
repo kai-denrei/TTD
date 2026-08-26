@@ -89,6 +89,14 @@ npm run dev · build · preview · typecheck · test
 npm run sweep -- enemy.speed 0.6 2.0 5      # headless lever comparison
 ```
 
+**TTD owns port 5144** (dev) and **5145** (preview), pinned with `strictPort`
+in `vite.config.ts`. This machine runs several projects at once and vite's
+default 5173 is contested — `blueprint-to-life` holds it. Without a pinned port
+you either load a different project's app at the URL you remembered, or vite
+walks to 5174/5175 and the URL changes between runs. `strictPort` turns a
+collision into an explicit failure rather than a surprise. 5144 pairs with the
+8144 that `npm run serve` already uses for the built output.
+
 ## State
 
 **M0a (the brain) and M0b (the rig made visible) are complete** — 239 tests,
