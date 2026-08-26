@@ -34,13 +34,17 @@ test('towers kill critters and it is attributed to the tower', () => {
   assert.ok(w.telemetry.data.killsByTower > 0, 'tower never killed anything');
 });
 
-test('god mode prevents heart death but still counts hits', () => {
+test('god mode prevents heart death but still counts leaks (I6 fix)', () => {
+  // I6: leak = critter reached heart (always); heartHit = damage applied (skipped in god mode)
+  // This test formerly asserted heartHits > 0 in god mode — that encoded the bug.
+  // Now: leaks > 0 (critters arrived), heartHits === 0 (no damage applied).
   const t = makeTuning();
   t.set('god.heartInvulnerable', 1); t.set('enemy.speed', 3); t.set('wave.size', 20); t.set('wave.dripRate', 0.05);
   const w = makeWorld({ seed: 2, tuning: t });
   const hp0 = w.heartHp;
   scripted(w, 8000);
-  assert.ok(w.telemetry.data.heartHits > 0, 'nothing ever reached the heart');
+  assert.ok(w.telemetry.data.leaks > 0, 'nothing ever reached the heart');
+  assert.equal(w.telemetry.data.heartHits, 0, 'heartHit must not fire in god mode — damage was not applied');
   assert.equal(w.heartHp, hp0, 'heart lost hp despite god mode');
 });
 
@@ -51,6 +55,15 @@ test('placeTower rejects blocked cells and counts decisions', () => {
   const open = w.dungeon.heart;
   assert.equal(w.placeTower(open), true);
   assert.equal(w.telemetry.data.decisionsThisPhase, 1, 'a rejected placement must not count');
+  assert.equal(w.telemetry.data.decisionsTotal, 1, 'decisionsTotal must match successful placements');
+});
+
+test('I10: placeTower enforces one tower per cell (occupancy)', () => {
+  const w = makeWorld({ seed: 3, tuning: makeTuning() });
+  const open = w.dungeon.heart;
+  assert.equal(w.placeTower(open), true, 'first tower should succeed');
+  assert.equal(w.placeTower(open), false, 'second tower on same cell must be rejected');
+  assert.equal(w.telemetry.data.decisionsTotal, 1, 'only one successful placement = one decision');
 });
 
 test('macro mode routes time to the macro counter', () => {
@@ -171,4 +184,26 @@ test('C4 swept-radius floor — fast moving tank still registers contacts (NEW-2
     w.telemetry.data.tankHits > 0,
     `moving tank at speed=10 registered 0 contacts — swept-radius floor removed or broken (bare static radius tunnels at this speed; floor removed: 0 contacts vs 40 with floor)`,
   );
+});
+
+// NEW-A: heart death telemetry
+test('NEW-A: heartDeathAt is stamped when heart reaches 0 HP', () => {
+  // High enemy speed, small drip rate → fast heart death; run 100s.
+  const t = makeTuning();
+  t.set('enemy.speed', 2.0);
+  t.set('wave.dripRate', 0.1);
+  t.set('wave.size', 20);
+  const w = makeWorld({ seed: 42, tuning: t });
+  w.placeTower(w.dungeon.heart);
+  scripted(w, 6000); // 100s
+  const s = w.telemetry.summary();
+  // survivedFor must always be <= elapsed + epsilon
+  assert.ok((s['survivedFor'] ?? 0) <= (s['elapsed'] ?? 0) + 1e-6);
+  // survived must be 0 or 1
+  assert.ok(s['survived'] === 0 || s['survived'] === 1);
+  // If it died, heartDeathAt must be positive and heartDied must be true
+  if (s['survived'] === 0) {
+    assert.ok((s['heartDeathAt'] ?? 0) > 0, 'heartDeathAt should be > 0 when survived=0');
+    assert.equal(w.heartDied, true, 'world.heartDied must be true');
+  }
 });

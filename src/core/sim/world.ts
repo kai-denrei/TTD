@@ -18,7 +18,9 @@
 //   stream(seed, 'grid')     → generateSphereMesh
 //   stream(seed, 'dungeon')  → generateDungeon (internal, used by dungeon.ts)
 //   stream(seed, 'waves')    → makeWaveEngine / planWave
-//   stream(seed, 'critters') → per-critter envelope RNG passed to stepCritter
+//   stream(seed, 'critters') → shared critter RNG stream; all critters draw in spawn order.
+//                               Comparability hazard: changing combat levers changes survivor
+//                               composition, shifting envelope draws for all subsequent critters.
 //
 // GOD MODE — hits are always recorded in telemetry; HP loss is skipped.
 // Telemetry itself knows nothing about invulnerability; the World holds that logic.
@@ -52,13 +54,16 @@ export type World = {
   towers: Tower[];
   tank: Tank;
   heartHp: number;
+  heartDied: boolean;
   macro: boolean;
   tuning: TuningStore;
   telemetry: ReturnType<typeof makeTelemetry>;
   waves: WaveEngine;
   elapsed: number;
   tick(dt: number, input: TankInput): void;
-  /** Place a tower on cell. Returns false if illegal (BLOCKED). Counts a decision only on success. */
+  /** Place a tower on an open (non-BLOCKED) cell. Returns false if the cell is BLOCKED or already occupied.
+   *  One tower per cell is enforced. Counts a decision only on success.
+   *  M0a placement rule: open cells only (spec §7 says "wall cells" — flagged for M0b spec update). */
   placeTower(cell: number): boolean;
   setMacro(on: boolean): void;
 };
@@ -223,13 +228,14 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       const c = critters.find((x) => x.id === id);
       if (c === undefined || !c.alive) continue;
       c.alive = false;
-      // Record hit in telemetry regardless of god mode
-      telemetry.heartHit();
+      // leak = critter reached the heart (always, even in god mode)
       telemetry.leak();
-      // God mode: skip HP loss if heartInvulnerable
+      // heartHit = damage was actually applied (skipped in god mode)
       if (!tuning.flag('god.heartInvulnerable')) {
         heartHp -= 1;
         if (heartHp < 0) heartHp = 0;
+        telemetry.heartHit();
+        if (heartHp === 0) telemetry.recordHeartDeath(elapsed);
       }
     }
 
@@ -237,11 +243,12 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     for (const evt of towerEvents) {
       const c = critters.find((x) => x.id === evt.critterId);
       if (c === undefined) continue;
-      const killed = hitCritter(c, evt.damage, tuning);
+      const killed = hitCritter(c, evt.damage, tuning, elapsed);
       if (killed) {
         const tower = towers.find((t) => t.id === evt.towerId);
         if (tower !== undefined) tower.kills += 1;
-        telemetry.kill('tower', elapsed - c.bornAt);
+        const ttk = c.firstHitAt !== null ? elapsed - c.firstHitAt : null;
+        telemetry.kill('tower', elapsed - c.bornAt, ttk);
       }
     }
 
@@ -249,9 +256,10 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     for (const evt of tankEvents) {
       const c = critters.find((x) => x.id === evt.critterId);
       if (c === undefined) continue;
-      const killed = hitCritter(c, evt.damage, tuning);
+      const killed = hitCritter(c, evt.damage, tuning, elapsed);
       if (killed) {
-        telemetry.kill('player', elapsed - c.bornAt);
+        const ttk = c.firstHitAt !== null ? elapsed - c.firstHitAt : null;
+        telemetry.kill('player', elapsed - c.bornAt, ttk);
       }
     }
 
@@ -277,8 +285,9 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
         telemetry.tankHit();
         tank.hits += 1;
         if (!tuning.flag('god.tankInvulnerable')) { tank.hp -= 1; if (tank.hp < 0) tank.hp = 0; }
-        if (hitCritter(c, tuning.get('tank.damage'), tuning)) {
-          telemetry.kill('player', elapsed - c.bornAt);
+        if (hitCritter(c, tuning.get('tank.damage'), tuning, elapsed)) {
+          const ttk = c.firstHitAt !== null ? elapsed - c.firstHitAt : null;
+          telemetry.kill('player', elapsed - c.bornAt, ttk);
         }
       }
     }
@@ -293,6 +302,16 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       enemiesAlive,
       tankActing,
     });
+
+    // ── 9. Prune dead critters ────────────────────────────────────────────────
+    // Done last so all step 7 `find` calls still have their targets.
+    // filter() preserves order → determinism holds.
+    // After pruning, critters[] contains only live critters.
+    if (critters.some((c) => !c.alive)) {
+      const alive = critters.filter((c) => c.alive);
+      critters.length = 0;
+      for (const c of alive) critters.push(c);
+    }
   }
 
   // ---- placeTower -----------------------------------------------------------
@@ -300,6 +319,9 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   function placeTower(cell: number): boolean {
     // Reject if cell is BLOCKED
     if (dungeon.tags[cell] === BLOCKED) return false;
+
+    // One tower per cell — stacking bypasses the decision budget
+    if (towers.some((t) => t.cell === cell)) return false;
 
     // Get cell position
     const pos: Vec3 = mesh.centers[cell] ?? [0, 1, 0];
@@ -314,6 +336,10 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   // ---- setMacro -------------------------------------------------------------
 
   function setMacro(on: boolean): void {
+    // Reset per-phase counter when entering a new macro phase
+    if (on && !macro) {
+      telemetry.resetPhaseCounters();
+    }
     macro = on;
   }
 
@@ -326,6 +352,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     towers,
     tank,
     get heartHp() { return heartHp; },
+    get heartDied() { return telemetry.data.heartDeathAt !== null; },
     get macro() { return macro; },
     tuning,
     telemetry,

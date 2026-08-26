@@ -16,27 +16,32 @@ export type Telemetry = {
   kills: number;
   killsByTower: number;
   killsByPlayer: number;
-  ttk: number[];             // seconds per kill (raw age at death)
+  ttk: number[];             // seconds from first hit to death (true TTK); excludes contact-kills with no prior hit
+  lifespan: number[];        // seconds from spawn to death (total age)
   waveClearTimes: number[];  // seconds each wave took to clear
   peakConcurrent: number;    // high-water mark of simultaneous live enemies
+  heartDeathAt: number | null; // null = still alive; set once when heartHp first hits 0
   // layer balance (spec §5)
   timeMacro: number;         // seconds spent in macro mode
   timeTactical: number;      // seconds spent in tactical mode
   modeSwitches: number;      // transitions between macro/tactical (not frames)
   tankIdleUnderThreat: number; // seconds: enemies alive AND tank not acting
   decisionsThisPhase: number;  // towers placed/upgraded/sold in current macro phase
+  decisionsTotal: number;      // lifetime total of all decisions across all phases
   elapsed: number;             // total time accumulated via tick()
 };
 
 export function makeTelemetry(): {
   data: Telemetry;
   tick(dt: number, ctx: { macro: boolean; enemiesAlive: number; tankActing: boolean }): void;
-  kill(by: 'tower' | 'player', ageSeconds: number): void;
+  kill(by: 'tower' | 'player', lifespan: number, ttk: number | null): void;
   heartHit(): void;
   tankHit(): void;
   leak(): void;
   decision(): void;
   waveCleared(seconds: number): void;
+  recordHeartDeath(elapsed: number): void;
+  resetPhaseCounters(): void;
   summary(): Record<string, number>;
   reset(): void;
 } {
@@ -51,13 +56,16 @@ export function makeTelemetry(): {
     killsByTower: 0,
     killsByPlayer: 0,
     ttk: [],
+    lifespan: [],
     waveClearTimes: [],
     peakConcurrent: 0,
+    heartDeathAt: null,
     timeMacro: 0,
     timeTactical: 0,
     modeSwitches: 0,
     tankIdleUnderThreat: 0,
     decisionsThisPhase: 0,
+    decisionsTotal: 0,
     elapsed: 0,
   };
 
@@ -88,9 +96,10 @@ export function makeTelemetry(): {
     }
   }
 
-  function kill(by: 'tower' | 'player', ageSeconds: number): void {
+  function kill(by: 'tower' | 'player', lifespan: number, ttk: number | null): void {
     data.kills += 1;
-    data.ttk.push(ageSeconds);
+    data.lifespan.push(lifespan);
+    if (ttk !== null) data.ttk.push(ttk);
     if (by === 'tower') {
       data.killsByTower += 1;
     } else {
@@ -112,6 +121,17 @@ export function makeTelemetry(): {
 
   function decision(): void {
     data.decisionsThisPhase += 1;
+    data.decisionsTotal += 1;
+  }
+
+  function recordHeartDeath(elapsed: number): void {
+    if (data.heartDeathAt === null) {
+      data.heartDeathAt = elapsed;
+    }
+  }
+
+  function resetPhaseCounters(): void {
+    data.decisionsThisPhase = 0;
   }
 
   function waveCleared(seconds: number): void {
@@ -134,13 +154,21 @@ export function makeTelemetry(): {
     const playerKillShare = data.kills > 0 ? data.killsByPlayer / data.kills : 0;
     const towerKillShare = data.kills > 0 ? data.killsByTower / data.kills : 0;
 
-    // --- TTK stats ---
+    // --- TTK stats (true TTK: first hit to death) ---
     const ttkMean = mean(data.ttk);
     const ttkP90 = p90(data.ttk);
+
+    // --- lifespan stats (total age from spawn to death) ---
+    const lifespanMean = mean(data.lifespan);
+    const lifespanP90 = p90(data.lifespan);
 
     // --- wave clear stats ---
     const waveClearMean = mean(data.waveClearTimes);
     const waveClearP90 = p90(data.waveClearTimes);
+
+    // --- heart survival ---
+    const survived = data.heartDeathAt === null ? 1 : 0;
+    const survivedFor = data.heartDeathAt !== null ? data.heartDeathAt : data.elapsed;
 
     return {
       macroShare,
@@ -148,8 +176,13 @@ export function makeTelemetry(): {
       towerKillShare,
       ttkMean,
       ttkP90,
+      lifespanMean,
+      lifespanP90,
       waveClearMean,
       waveClearP90,
+      survived,
+      survivedFor,
+      heartDeathAt: data.heartDeathAt ?? 0,
       elapsed: data.elapsed,
       kills: data.kills,
       heartHits: data.heartHits,
@@ -159,6 +192,7 @@ export function makeTelemetry(): {
       tankIdleUnderThreat: data.tankIdleUnderThreat,
       peakConcurrent: data.peakConcurrent,
       decisionsThisPhase: data.decisionsThisPhase,
+      decisionsTotal: data.decisionsTotal,
     };
   }
 
@@ -171,17 +205,20 @@ export function makeTelemetry(): {
     data.killsByTower = 0;
     data.killsByPlayer = 0;
     data.ttk.length = 0;
+    data.lifespan.length = 0;
     data.waveClearTimes.length = 0;
     data.peakConcurrent = 0;
+    data.heartDeathAt = null;
     data.timeMacro = 0;
     data.timeTactical = 0;
     data.modeSwitches = 0;
     data.tankIdleUnderThreat = 0;
     data.decisionsThisPhase = 0;
+    data.decisionsTotal = 0;
     data.elapsed = 0;
   }
 
-  return { data, tick, kill, heartHit, tankHit, leak, decision, waveCleared, summary, reset };
+  return { data, tick, kill, heartHit, tankHit, leak, decision, waveCleared, recordHeartDeath, resetPhaseCounters, summary, reset };
 }
 
 // --- private helpers ---
