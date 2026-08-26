@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { turretPts } from '../core/models/turret.ts';
 import { minePts } from '../core/models/mine.ts';
+import { CREATURE_MODELS } from '../core/models/creatures.ts';
 import { makePointCloud, basisAt } from './points.ts';
 import { WALL_HEIGHT } from './geometry.ts';
 import { HEART_MAX_HP } from '../core/sim/world.ts';
@@ -18,6 +19,11 @@ import type { World } from '../core/sim/world.ts';
 import type { Vec3 } from '../core/sphere/vec3.ts';
 
 const CRITTER_CAP = 200;
+/** Per-species pool size. Peak concurrency is ~30 across ALL types, and a wave
+ *  draws from at most a handful of species, so 48 each is generous while
+ *  keeping eight extra buffers cheap. Sizing every species at CRITTER_CAP would
+ *  allocate 200 slots each for types that never appear together. */
+const SPECIES_CAP = 48;
 const TOWER_CAP = 64;
 const CRITTER_SCALE = 0.022;
 const TOWER_SCALE = 0.03;
@@ -34,9 +40,20 @@ export function makeUnits(): Units {
   // spacing of a ~500-point cloud: dense enough to read as a solid silhouette,
   // sparse enough that additive stacking does not clip to white up close.
   const DOT = 0.07;
+  // One pooled cloud per species, plus the mine as the fallback. Twelve types
+  // sharing one silhouette meant the roster's whole point — recognise a threat
+  // before it arrives — never reached the screen. Types with no dedicated model
+  // fall back to the mine, which is correct art for the ones literally named
+  // after mines rather than a stopgap.
   const critters = makePointCloud(mine, CRITTER_CAP, {
     scale: CRITTER_SCALE, sizeFactor: DOT, color: 0xff5a3c, highlight: 0xffd08a,
   });
+  const species = new Map<string, ReturnType<typeof makePointCloud>>();
+  for (const [type, gen] of CREATURE_MODELS) {
+    species.set(type, makePointCloud(gen(), SPECIES_CAP, {
+      scale: CRITTER_SCALE, sizeFactor: DOT, color: 0xff5a3c, highlight: 0xffd08a,
+    }));
+  }
   const towers = makePointCloud(turret, TOWER_CAP, {
     scale: TOWER_SCALE, sizeFactor: DOT, color: 0x64b5ff, highlight: 0xd8f0ff,
   });
@@ -50,11 +67,13 @@ export function makeUnits(): Units {
   const group = new THREE.Group();
   group.name = 'units';
   for (const c of [critters, towers, tank, heart]) group.add(c.object);
+  for (const c of species.values()) group.add(c.object);
 
   function sync(world: World): void {
     const { mesh } = world;
 
     critters.begin();
+    for (const c of species.values()) c.begin();
     for (const c of world.critters) {
       if (!c.alive) continue;
       const n = normalOf(c.pos);
@@ -74,9 +93,11 @@ export function makeUnits(): Units {
       // remaining life on the actor itself so the board stays clean and you
       // judge threat by silhouette, not chrome.
       const hpFrac = c.hpMax > 0 ? Math.max(0, c.hp) / c.hpMax : 1;
-      critters.add(lift(c.pos, scale), scale, basisAt(n, heading), 0.45 + 0.55 * hpFrac, col);
+      const cloud = species.get(c.type) ?? critters;
+      cloud.add(lift(c.pos, scale), scale, basisAt(n, heading), 0.45 + 0.55 * hpFrac, col);
     }
     critters.end();
+    for (const c of species.values()) c.end();
 
     towers.begin();
     for (const t of world.towers) {
