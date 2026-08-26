@@ -96,5 +96,12 @@ function makeEdges(mesh: SphereMesh): THREE.LineSegments {
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
   const lines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: COLOR_EDGE }));
   lines.name = 'board-edges';
+  // NEVER a pick target. The overlay is a visual aid for reading cell
+  // boundaries, but it sits fractionally in front of the surface, so a
+  // recursive raycast hits it first and returns an intersection with no
+  // faceIndex — silently swallowing every tower placement. Opting out of
+  // raycasting here keeps that rule beside cellFromFaceIndex rather than
+  // leaving it as a filter every caller has to remember.
+  lines.raycast = () => {};
   return lines;
 }
