@@ -99,23 +99,16 @@ collision into an explicit failure rather than a surprise. 5144 pairs with the
 
 ## State
 
-**M0a (brain), M0b (rig made visible) and M0c-1 (walls & high ground) are
-complete** — 265 tests, determinism verified. `npm run dev` on **port 5144**
-(pinned; vite's default 5173 is taken by another project) serves a board that
-reads as a 3D maze: BLOCKED cells extrude into walls with tops and skirts,
-towers build on the high ground overlooking corridors, and the tank steers
-correctly.
+**M0a (brain), M0b (rig visible), M0c-1 (walls) and M0c-2 (combat visible) are
+complete** — 293 tests, determinism verified. `npm run dev` on **port 5144**
+(pinned; 5173 is taken by another project) serves a 3D maze board where towers
+fire visible travelling shots that can miss, the tank fires along its barrel
+with heat and lockout, and impacts, deaths and beams all render.
 
-**M0c is PoC parity in three chunks.** Chunk 1 is done. Next:
-- **Chunk 2 — combat made visible.** M0b rendered state but not *events*: the
-  sim resolves tower damage, kills and hits every tick and nothing draws any of
-  it. Tower shots, tracers, beams, muzzle flashes, hit flashes, death bursts;
-  tank aimed fire along its barrel, plus the PoC's laser heat/lockout.
-- **Chunk 3 — tower roster & economy.** Types with distinct attacks, cost,
-  sell, upgrade, range rings.
-
-Economy and win condition come *after* those. Balancing what you cannot see or
-steer is the mistake that started this milestone.
+**Next: M0c chunk 3 — tower roster & economy.** Types with distinct attacks
+(splash and mortar arcs come with the types that use them), cost, sell,
+upgrade, range rings. Economy and win condition follow that. Balancing what you
+cannot see or steer is the mistake that started this milestone.
 
 **The dashboard is Admin Mode — internal tooling, never shipped to players.**
 Gated by `?admin=1`, backtick, or a five-tap top-left corner; `src/ui/admin/` is
@@ -125,17 +118,21 @@ Known state when tuning — full detail in `docs/05-M0c-notes.md`:
 
 - **`survivedFor` is the difficulty signal.** `heartHits` is not: runs truncate
   at heart death, so it saturates at the heart's 20 HP.
-- **Tower placement is currently a decision with no consequence.** At default
-  stats, a tower overlooking the lane versus one on a distant wall differ by 4%
-  (`survivedFor` 48.33 vs 46.35). At `tower.damage=20` the same comparison is
-  87.53 vs 46.35. The one-tower baseline is not merely weak — it is weak enough
-  that *where you build does not matter*.
-- **Three levers' observability is limited by one root cause:** the default
-  tower cannot complete a kill (`tower.damage` 3 vs `enemy.hp` 5 needs two hits
-  before the critter leaves range). `tower.damage`, `tank.damage` and now
-  `tower.rate` all need a companion override to be testable.
-- **Terrain stays under the bloom threshold** by design — bloom is for emissive
-  things. The board reads by relief, not brightness.
+- **`playerKillShare` is uninformative in sweeps.** Aimed fire means the
+  scripted patrol — which sweeps its heading and never points at anything —
+  kills nothing. Read it from played sessions, or teach the script to aim.
+  Spec §5 calls it the sharpest single number in M0, so this matters.
+- **FIVE levers are limited by one root cause: the default offence cannot
+  complete a kill.** `tower.damage`, `tank.damage`, `tower.rate`, `enemy.hp`
+  and `wave.hpGrowth` all need companion overrides. `wave.hpGrowth` needs the
+  *opposite* companion to the others — damage low enough that HP still matters.
+  This is the strongest standing signal that the combat defaults are wrong.
+- **Tower placement is currently a decision with little consequence** at
+  default stats, though projectiles narrowed the gap.
+- **Terrain sits under the bloom threshold** by design; only emissive things
+  glow. That is why `bloom.strength` can be raised without washing out the board.
+- **A constant ported from the PoC is in the PoC's units until proven
+  otherwise** — `projSpeed` was wrong by ~5x for exactly this reason.
 - **Compare is a three-seed mean, not a truth.** Critters share one RNG stream.
 
 ## Lessons that must not be relearned

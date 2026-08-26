@@ -155,12 +155,105 @@ guard. Open-cell placement would reintroduce that problem.
 
 ---
 
-## 6. Still missing for PoC parity
+## 6. Chunk 2 — combat made visible
 
-Chunk 2 (**combat made visible**) — `spawnTowerShot` with homing and arced
-projectiles, `makeTracer` trails, `spawnBeam` hitscan beams, muzzle flashes, hit
-flashes, death bursts; tank aimed fire along its barrel, and the twin-laser heat
-and lockout model (`LASER_MAX_HEAT` 2.4 s, cool 1.4).
+### 6.1 The root cause was a missing channel, not missing particles
+
+M0b rendered **state** and not **events**: the world resolved damage, kills and
+hits every tick and discarded all of it, exposing only surviving positions. A
+tower killing a critter was a state transition with no visual trace. So chunk 2
+started with an event buffer (`core/sim/events.ts`) — every effect hangs off it.
+
+The buffer clears at the **start** of each tick rather than on drain, because a
+headless sweep has no renderer and draining is not guaranteed. Asserted: 3,000
+undrained ticks hold fewer than 64 events.
+
+### 6.2 Two calibration bugs found only by running it
+
+**Shots tunnelled through critters.** At the default speed a shot advanced 0.02
+per tick against a 0.02 hit radius, so the point test sampled straight past its
+target. Fixed with a swept floor scaled to the actual step — the same fix, and
+the same reason, as the tank's contact radius in `world.ts` step 8d.
+
+**`projSpeed`'s range was wrong by a factor of ~5.** It was carried over from
+the PoC's `16 × cellSide ≈ 1.1` without checking it against *this* project's
+speed scale. Measured here: critters move **0.67 u/s** at `enemy.speed` 1 and
+**2.83 u/s** at 3.0. The original default of 1.2 meant a shot could not catch
+anything above `enemy.speed` ≈ 1.4 — the tower fired and the critter simply
+outran it. Default is now 6.
+
+**Lesson worth keeping:** a constant ported from the PoC is in the PoC's units
+until proven otherwise. Measure the local scale before adopting the number.
+
+### 6.3 The baseline moved, hard — and one number went to zero
+
+| `enemy.speed` | `survivedFor` M0c-1 | M0c-2 | kills | `playerKillShare` |
+|---|---|---|---|---|
+| 0.6 | 61.57 | **40.35** | 6 → 1 | **0.00** |
+| 1.3 | 43.88 | **28.25** | 7 → 1 | **0.00** |
+| 2.0 | 37.15 | **36.17** | 5 → 2 | 0.50 |
+
+Damage now lands late and can miss, so the game is materially harder.
+
+**`playerKillShare` reading 0.00 is aimed fire working correctly, not a bug.**
+The scripted patrol sweeps its heading with `sin(k/30)` and drives back and
+forth; it never points at anything. With a 45° fire arc it therefore has no
+target most of the time, and kills nothing.
+
+That is realistic — a tank that does not aim does not kill — but it has a
+consequence worth deciding on deliberately: spec §5 calls
+`player-kills vs tower-kills` "the sharpest single number in M0", and it is now
+**uninformative for any scripted run**. Two ways forward, neither taken yet
+because it is a design call rather than a fix:
+
+- give the patrol script a "turn toward the nearest critter" behaviour, at the
+  cost of a scripted tank that aims better than a person would; or
+- accept that `playerKillShare` is only meaningful in **played** sessions, and
+  read it from the live telemetry pane rather than from sweeps.
+
+### 6.4 Five levers, one root cause
+
+Adding heat and aimed fire pushed two more levers into the dead zone, bringing
+the running total to five whose observability is limited by the same thing:
+**the default offence is too weak to complete a kill.**
+
+- `tower.damage`, `tank.damage` — need `enemy.hp = 20` to be testable
+- `tower.rate` — needs `tower.damage = 20`; at default damage the tower kills
+  nothing above ~2 s between shots
+- `enemy.hp` — at default offence, `enemy.hp = 20` yields exactly **0 kills**,
+  so its upper half compared zero against zero
+- `wave.hpGrowth` — needs the **opposite** companion: damage low enough that HP
+  still matters. Measured live at damage 6 and 8, dead at 10+, where everything
+  is one-shot and growing HP changes nothing. Its companion is **7**, the centre
+  of that band — not an edge, because a lever sitting at the edge of its
+  observable region goes dead on any unrelated RNG shift. That is how
+  `tower.rate` died.
+
+Both heat levers read dead for a different reason: the harness pulsed fire 1
+tick in 5, adding 0.2 heat/s against 1.12/s of cooling, so heat never
+accumulated and the levers were being tested outside the domain they exist for.
+Both harnesses now **hold** fire, which is the realistic stress and is
+self-limiting precisely because lockout exists.
+
+### 6.5 What still is not good enough
+
+Combat is now unmistakably visible — muzzle flashes, tracers in flight, hit
+flashes, death bursts, tank beams — and `bloom.strength`'s default rose 0.8 →
+1.5 to give it punch, which is safe because only emissive things cross the
+threshold.
+
+But the scene is still **dark overall**, and the effects read as tasteful rather
+than impactful. Hitstop, damage-scaled shake and audio are what would actually
+sell a hit, and all three are M3. The `fx.flashDur` and `fx.burstSize` levers
+exist so this is tunable rather than baked, and that is the right place to leave
+it until the feel pass.
+
+---
+
+## 7. Still missing for PoC parity
+
+Chunk 2 is done. Not carried over from the PoC: **splash damage and mortar
+arcs**, which belong with the tower types that use them, in chunk 3.
 
 Chunk 3 (**roster & economy**) — typed towers with distinct attacks, cost,
 sell, upgrade, range rings, and `economy.js`.
