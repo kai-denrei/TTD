@@ -1,0 +1,43 @@
+:root {
+  --bg: #05070c;
+  --ink: #cfe9ff;
+  --dim: #6b8299;
+  --accent: #6fe6ff;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+  /* touch-action is NOT inherited — set it on every element that can be
+     dragged, or a canvas will still get the browser's pan/zoom gestures.
+     (PoC dead end: an html/body rule never reached the canvases.) */
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#app { position: absolute; inset: 0; }
+
+#scene { display: block; width: 100%; height: 100%; touch-action: none; }
+
+.boot {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  text-align: center;
+  color: var(--dim);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.boot b { color: var(--accent); font-weight: 600; letter-spacing: 0.24em; }

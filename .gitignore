@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+.DS_Store
+.vite/
+
+# deban is LOCAL working memory — decisions, dead ends, lessons.
+# Never published; see .deban/_index.md
+.deban/
+
+# subagent-driven-development scratch (briefs, reports, review packages)
+.superpowers/
