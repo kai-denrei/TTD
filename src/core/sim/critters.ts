@@ -27,7 +27,6 @@ export type Critter = {
   prog: number;     // 0..1 progress along current segment
   pos: Vec3;
   // speed envelope
-  envPhase: number;   // seconds until next re-target
   envValue: number;   // current eased envelope value
   envTarget: number;  // target we are easing toward
   envLeft: number;    // seconds remaining in current target window
@@ -37,6 +36,7 @@ export type Critter = {
   // tank contact cooldown
   contactLeft: number; // seconds remaining before this critter can ram the tank again (0 = ready)
   bornAt: number;
+  firstHitAt: number | null; // null until first damage lands; used for true TTK calculation
 };
 
 // ---- Easing rate ------------------------------------------------------------
@@ -121,10 +121,11 @@ export function spawnCritter(
     id, alive: true, hp,
     cur: cell, next: cell, prog: 0,
     pos: [0, 0, 0],
-    envPhase, envValue: 1, envTarget, envLeft: envPhase,
+    envValue: 1, envTarget, envLeft: envPhase,
     reactMult: 1, reactLeft: 0,
     contactLeft: 0,
     bornAt: now,
+    firstHitAt: null,
   };
   return c;
 }
@@ -243,9 +244,14 @@ export function stepCritter(
   return 'moving';
 }
 
-/** Apply damage. Returns true if the critter was killed by this hit. */
-export function hitCritter(c: Critter, damage: number, tuning: TuningStore): boolean {
+/** Apply damage. Returns true if the critter was killed by this hit.
+ *  Pass `now` (elapsed seconds) to stamp firstHitAt for true TTK calculation. */
+export function hitCritter(c: Critter, damage: number, tuning: TuningStore, now?: number): boolean {
   if (!c.alive) return false;
+  // Stamp first hit time (idempotent — only the first hit counts for TTK)
+  if (c.firstHitAt === null && now !== undefined) {
+    c.firstHitAt = now;
+  }
   c.hp -= damage;
   if (c.hp <= 0) {
     c.alive = false;
