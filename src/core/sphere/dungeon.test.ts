@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateSphereMesh } from './grid.ts';
-import { generateDungeon, bfsDist, openNeighbors, BLOCKED } from './dungeon.ts';
+import { generateDungeon, bfsDist, openNeighbors, BLOCKED, isFrontierWall, nearestFrontierWall } from './dungeon.ts';
 
 const MESH = generateSphereMesh({ seed: 7, points: 600, relaxIters: 40 });
 const D = generateDungeon(MESH, { seed: 7, rooms: 12, roomRadius: 4,
@@ -92,4 +92,43 @@ test('openNeighbors returns only open, adjacent cells', () => {
       assert.notEqual(D.tags[n], BLOCKED, 'not open');
     }
   }
+});
+
+// --- frontier walls: where a tower may stand -------------------------------
+
+test('a frontier wall is BLOCKED and borders at least one open cell', () => {
+  const cell = nearestFrontierWall(MESH, D, D.heart);
+  assert.notEqual(cell, -1);
+  assert.equal(D.tags[cell], BLOCKED);
+  assert.ok((MESH.adj[cell] ?? []).some((n) => D.tags[n] !== BLOCKED));
+  assert.ok(isFrontierWall(MESH, D, cell));
+});
+
+test('an open cell is not a frontier wall', () => {
+  assert.equal(isFrontierWall(MESH, D, D.heart), false);
+});
+
+test('a wall with no open neighbour is not a frontier wall', () => {
+  const buried = MESH.quads.findIndex(
+    (_q, i) => D.tags[i] === BLOCKED && (MESH.adj[i] ?? []).every((n) => D.tags[n] === BLOCKED),
+  );
+  assert.ok(buried >= 0, 'fixture has no buried wall to test');
+  assert.equal(isFrontierWall(MESH, D, buried), false);
+});
+
+test('the heart is close to high ground — the baseline tower stays effective', () => {
+  const cell = nearestFrontierWall(MESH, D, D.heart);
+  const a = MESH.centers[D.heart]!;
+  const b = MESH.centers[cell]!;
+  const chord = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  assert.ok(chord < 0.25, `nearest high ground is ${chord.toFixed(3)} away, outside default tower.range`);
+});
+
+test('nearestFrontierWall is deterministic across calls', () => {
+  assert.equal(nearestFrontierWall(MESH, D, D.heart), nearestFrontierWall(MESH, D, D.heart));
+});
+
+test('a cell that is itself a frontier wall returns itself', () => {
+  const cell = nearestFrontierWall(MESH, D, D.heart);
+  assert.equal(nearestFrontierWall(MESH, D, cell), cell);
 });

@@ -198,3 +198,50 @@ export function openNeighbors(d: Dungeon, mesh: SphereMesh, cell: number): numbe
 
 // Keep Vec3 importable from this module for convenience (mirrors grid.ts pattern).
 export type { Vec3 };
+
+// ---- Frontier walls: where a tower may stand --------------------------------
+
+/** A wall cell that borders open ground — the only kind a tower can use.
+ *
+ *  The PoC's "beyond the frontier" rule (td-tab.js:2966). A wall buried inside
+ *  a wall mass overlooks nothing and can shoot nothing, and on this board ~73%
+ *  of cells are BLOCKED — so most wall cells are buried, and without this rule
+ *  most legal placements would be useless.
+ *
+ *  The companion rule, which is why towers belong on walls at all: walls carry
+ *  no enemy pathing, so a tower on one can never dam a lane. That is what lets
+ *  placement skip a connectivity guard entirely. */
+export function isFrontierWall(mesh: SphereMesh, d: Dungeon, cell: number): boolean {
+  if (d.tags[cell] !== BLOCKED) return false;
+  return (mesh.adj[cell] ?? []).some((n) => d.tags[n] !== BLOCKED);
+}
+
+/** Nearest frontier wall to `from`, by breadth-first search over the cell
+ *  graph. Ties break by lowest cell index: a baseline tower that moved between
+ *  runs would turn every telemetry comparison into noise.
+ *  Returns -1 if the board has no frontier wall at all. */
+export function nearestFrontierWall(mesh: SphereMesh, d: Dungeon, from: number): number {
+  if (isFrontierWall(mesh, d, from)) return from;
+  const seen = new Set<number>([from]);
+  let frontier = [from];
+  while (frontier.length > 0) {
+    const next: number[] = [];
+    let best = -1;
+    for (const cell of frontier) {
+      for (const n of mesh.adj[cell] ?? []) {
+        if (seen.has(n)) continue;
+        seen.add(n);
+        if (isFrontierWall(mesh, d, n)) {
+          if (best === -1 || n < best) best = n;
+        } else {
+          next.push(n);
+        }
+      }
+    }
+    // Return only after the whole ring is scanned, so the lowest-index tie-break
+    // applies across the ring rather than to whichever neighbour came first.
+    if (best !== -1) return best;
+    frontier = next;
+  }
+  return -1;
+}
