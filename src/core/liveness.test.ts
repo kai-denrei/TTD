@@ -4,8 +4,20 @@ import { makeTuning } from './tuning/store.ts';
 import { makeWorld } from './sim/world.ts';
 import { LEVERS } from './tuning/schema.ts';
 
-// Render-only levers: never read by sim, by design.
-// These will be confirmed live in M0b (render layer).
+// Render-only levers: they cannot move sim telemetry by design, so the
+// diff-the-telemetry gate below cannot judge them. They are NOT untested —
+// src/render/bindings.test.ts gates them instead, asserting that each has
+// exactly one declared binding, that min and max leave the render target in
+// different states, and that readRenderState re-reads every key each frame
+// (never caching). Verified by sabotage: making a binding a no-op fails both
+// the effect and the per-frame-read assertions.
+//
+// Keep this set in sync with RENDER_ONLY_KEYS in src/render/bindings.ts; the
+// coverage test there fails if one drifts.
+//
+// Residual gap, stated rather than hidden: bindings.test.ts proves the value
+// reaches the property, not that three.js honours it. That is checked by eye
+// and recorded in the M0b notes.
 const RENDER_ONLY = new Set([
   'bloom.strength',
   'bloom.radius',
