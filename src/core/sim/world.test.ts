@@ -35,16 +35,15 @@ test('towers kill critters and it is attributed to the tower', () => {
 });
 
 test('god mode prevents heart death but still counts leaks (I6 fix)', () => {
-  // I6: leak = critter reached heart (always); heartHit = damage applied (skipped in god mode)
-  // This test formerly asserted heartHits > 0 in god mode — that encoded the bug.
-  // Now: leaks > 0 (critters arrived), heartHits === 0 (no damage applied).
+  // I6: leak = critter reached heart (always); heartHit = also always (spec §5: god hits count)
+  // I-1: heartHit is now unconditional (matches tankHit symmetry); only HP mutation is skipped.
   const t = makeTuning();
   t.set('god.heartInvulnerable', 1); t.set('enemy.speed', 3); t.set('wave.size', 20); t.set('wave.dripRate', 0.05);
   const w = makeWorld({ seed: 2, tuning: t });
   const hp0 = w.heartHp;
   scripted(w, 8000);
   assert.ok(w.telemetry.data.leaks > 0, 'nothing ever reached the heart');
-  assert.equal(w.telemetry.data.heartHits, 0, 'heartHit must not fire in god mode — damage was not applied');
+  assert.ok(w.telemetry.data.heartHits > 0, 'heartHit must fire in god mode — spec §5: hits always counted');
   assert.equal(w.heartHp, hp0, 'heart lost hp despite god mode');
 });
 

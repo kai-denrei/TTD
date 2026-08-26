@@ -187,9 +187,14 @@ time-under-fire. Now `ttkMean` measures elapsed from first damage to death
 falls with speed because enemies travel faster" was wrong — it was measuring
 the journey. True TTK is more stable across speed settings as shown above.
 
-**7. `leaks` duplicated `heartHits` (I6 fix).**
-Before the fix, both counters were incremented together and were always equal.
-Now: `leak` = critter reached the heart (always, even in god mode); `heartHit`
+**7. `leaks` duplicated `heartHits` (I6 fix); god-mode symmetry corrected (I-1 fix).**
+Before I6, both counters were incremented together and were always equal.
+After I6: `leak` = critter reached the heart (always, even in god mode); `heartHit`
 = damage was actually applied (skipped if `god.heartInvulnerable`). Under
-normal play (no god mode), leaks === heartHits. Under god mode, leaks > 0 and
-heartHits === 0.
+normal play (no god mode), leaks === heartHits.
+
+After I-1: `heartHit` is now unconditional — counted even in god mode — matching the
+established `tankHit` behaviour (spec §5: "god-mode hits are always recorded in
+telemetry; HP loss is skipped"). Under god mode: leaks > 0, heartHits > 0 (counted),
+heartHp = HEART_MAX_HP (no damage). This also gates heartHit on heartHp > 0 to
+prevent post-mortem phantom hits (old code could record 20+ extra hits on a dead heart).

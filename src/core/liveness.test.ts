@@ -96,14 +96,15 @@ describe('liveness — every sim lever must move the telemetry needle', () => {
 
   // Targeted god-mode tests
   test('god.heartInvulnerable prevents HP loss but still counts leaks (I6 fix)', () => {
-    // I6: leak = critter arrived (always); heartHit = damage applied (skipped in god mode)
+    // I6: leak = critter arrived (always); heartHit = also always (spec §5: god hits count normally)
+    // I-1: heartHit now symmetric with tankHit — recorded unconditionally, HP loss gated separately.
     const t = makeTuning();
     t.set('god.heartInvulnerable', 1); t.set('enemy.speed', 3); t.set('wave.size', 20); t.set('wave.dripRate', 0.05);
     const w = makeWorld({ seed: 42, tuning: t });
     const hp0 = w.heartHp;
     for (let i = 0; i < 8000; i++) w.tick(1 / 60, { forward: 1, turn: 0, fire: false });
     assert.ok(w.telemetry.data.leaks > 0, 'nothing reached the heart');
-    assert.equal(w.telemetry.data.heartHits, 0, 'heartHit fires only when damage is applied (not in god mode)');
+    assert.ok(w.telemetry.data.heartHits > 0, 'heartHit must fire in god mode — spec §5: hits always counted');
     assert.equal(w.heartHp, hp0, 'heart HP changed despite god mode');
   });
 

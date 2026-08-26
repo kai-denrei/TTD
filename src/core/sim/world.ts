@@ -235,12 +235,15 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       c.alive = false;
       // leak = critter reached the heart (always, even in god mode)
       telemetry.leak();
-      // heartHit = damage was actually applied (skipped in god mode)
-      if (!tuning.flag('god.heartInvulnerable')) {
-        heartHp -= 1;
-        if (heartHp < 0) heartHp = 0;
+      // heartHit = spec §5 "god-mode hits count normally" — symmetry with tankHit
+      // (called unconditionally; only HP mutation + death stamp are gated on invulnerability)
+      // Also gated on heartHp > 0 to prevent post-mortem phantom hits.
+      if (heartHp > 0) {
         telemetry.heartHit();
-        if (heartHp === 0) telemetry.recordHeartDeath(elapsed);
+        if (!tuning.flag('god.heartInvulnerable')) {
+          heartHp -= 1;
+          if (heartHp === 0) telemetry.recordHeartDeath(elapsed);
+        }
       }
     }
 
