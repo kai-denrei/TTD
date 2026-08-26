@@ -9,6 +9,40 @@
 
 ---
 
+## 0. What the game is
+
+> **A mix of passive TD macro strategy with some tactical tank battle
+> elements, and retro/gaming homage and nostalgia for story-driven
+> minigames.** — operator, 2026-08-26
+
+Three layers, three tempos, and they are *supposed* to feel different:
+
+| Layer | Tempo | The player is… | Intensity comes from |
+|---|---|---|---|
+| **TD macro** | slow, deliberate | planning, reading the board, committing resources | consequence, not pressure |
+| **Tank tactical** | fast, hands-on | driving, aiming, intercepting | the moment — this is where stress lives |
+| **Minigames** | a held breath | inside a story beat | homage, novelty, stakes |
+
+This resolves a tension the design has been carrying. Earlier work tried to
+make the **TD layer itself** relentless — drip spawns, overlap, never-wait
+pressure. But if the TD layer is *supposed* to be passive macro strategy, then
+cranking it is fighting the genre: the board's job is to give you decisions
+with consequences, and the **tank** layer's job is to supply the adrenaline.
+"Not fun yet" may be less a tuning failure than a misassigned load.
+
+Practical consequences:
+- **Pressure is layered, not global.** The macro layer can breathe (clear-gated
+  waves, a real anticipation beat) *while* the tactical layer is dense, because
+  they're different clocks. §6.1's per-wave program should modulate both.
+- **Mode-switching is the core loop, not a feature.** Anything that forces you
+  off the board and into the tank (§7.3's unseeable threat) is load-bearing.
+- **Minigames carry story and homage** — they are a pillar, not a reward
+  mechanic bolted on. Paradroid, Trace, terminal hacking: the nostalgia *is*
+  the point, and it's the layer that carries narrative.
+- **The rig must measure the balance between layers**, not just enemy
+  difficulty: time spent in macro vs tactical, switches per wave, and whether
+  the tank is doing something meaningful or just idling (§8).
+
 ## 1. Why a new project
 
 The PoC proved the hard things: an organic quad grid on a sphere, a dungeon
@@ -290,6 +324,17 @@ blueprints as dive rewards.
 Its own panel, not folded into world controls. Mobile-legible.
 
 **Groups:** intensity · critters · swarm · player · feel · camera · god
+
+**Layer-balance telemetry (from §0).** The rig's job is not only "is the enemy
+hard enough" but "is each layer doing its job":
+- **time in macro vs tactical** — the headline ratio; the genre says the tank
+  should own the intense moments
+- **mode switches per wave** — is the loop actually switching, or has the
+  player settled into one layer?
+- **tank idle time under threat** — the tank existing but having nothing to do
+  is the specific failure the unseeable threat (§7.3) is designed to prevent
+- **decisions per macro phase** — towers placed/upgraded/sold per breath; a
+  passive layer still has to pose questions
 
 **God mode** (explicitly requested): infinite heart HP and infinite tank HP,
 both **still counting hits**. The point isn't invulnerability — it's watching
