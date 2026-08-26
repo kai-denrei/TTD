@@ -191,3 +191,10 @@ html, body, #app { height: 100%; margin: 0; background: #05070c; overflow: hidde
 .tp-upgrade:disabled, .tp-sell:disabled { opacity: 0.4; cursor: default; }
 .tp-upgrade.is-poor { border-color: #5a3340; }
 .tp-sell { background: #24162a; }
+
+/* Danger states. The board runs hotter as the heart fails — losing should feel
+   like losing, not like a number going down. */
+#app[data-danger="1"] .hud b { color: #ffd08a; }
+#app[data-danger="2"] .hud b { color: #ff6a5a; }
+#app[data-danger="2"] .hud { animation: danger-pulse 1.1s ease-in-out infinite; }
+@keyframes danger-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }

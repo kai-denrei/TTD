@@ -274,22 +274,22 @@ export const LEVERS: readonly Lever[] = [
     key: 'bloom.strength',
     group: 'feel',
     label: 'Bloom strength',
-    min: 0, max: 3, step: 0.05, value: 1.5,
+    min: 0, max: 3, step: 0.05, value: 0.85,
     help: 'Post-processing bloom intensity. Raised from 0.8 in M0c-2: the terrain sits deliberately below the bloom threshold (see render/geometry.ts), so bloom brightens ONLY units, shots and impacts. At 0.8 combat was legible but muted, which was the original complaint. Aesthetic only — no gameplay effect.',
   },
   {
     key: 'bloom.radius',
     group: 'feel',
     label: 'Bloom radius',
-    min: 0, max: 1, step: 0.05, value: 0.4,
+    min: 0, max: 1, step: 0.05, value: 0.22,
     help: 'Bloom spread radius (normalized). Larger = softer, more diffuse glow.',
   },
   {
     key: 'bloom.threshold',
     group: 'feel',
     label: 'Bloom threshold',
-    min: 0, max: 1, step: 0.05, value: 0.5,
-    help: 'Luminance threshold above which bloom is applied. Higher = only the brightest pixels bloom.',
+    min: 0, max: 1, step: 0.05, value: 0.88,
+    help: 'Luminance above which bloom applies — measured on the BUFFER value, not the on-screen one. Raised from 0.5 in M0c-3: terrain colours are gamma pre-compensated (see render/geometry.ts), which lifts their buffer values, and at 0.5 a legibly-lit floor bloomed and washed the board to white. Effects carry a 2.4x intensity multiplier so they still glow well above this.',
   },
 
   {

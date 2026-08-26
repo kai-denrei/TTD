@@ -25,6 +25,10 @@ import * as THREE from 'three';
 import type { ModelPoint } from '../core/models/helpers.ts';
 import type { Vec3 } from '../core/sphere/vec3.ts';
 
+/** Emissive multiplier for unit dot-clouds. Sized so a unit clears
+ *  bloom.threshold (0.8) while the gamma-compensated terrain stays under it. */
+const UNIT_INTENSITY = 2.8;
+
 export type Basis = { fwd: Vec3; up: Vec3; side: Vec3 };
 
 /** Orthonormal basis on the sphere surface: model +Y -> normal (up),
@@ -96,8 +100,13 @@ export function makePointCloud(
   );
   object.frustumCulled = false;
 
-  const base = new THREE.Color(opts.color);
-  const hi = new THREE.Color(opts.highlight);
+  // Units are meant to GLOW against a matte board. Vertex colours are not
+  // clamped before the shader and the material is additive, so pushing past 1
+  // is how a unit clears the bloom threshold. Without this they sit just under
+  // it and read as flat paint — the board would be legible and the things
+  // moving on it would not be.
+  const base = new THREE.Color(opts.color).multiplyScalar(UNIT_INTENSITY);
+  const hi = new THREE.Color(opts.highlight).multiplyScalar(UNIT_INTENSITY);
   let cursor = 0;
   let warned = false;
 
@@ -129,9 +138,10 @@ export function makePointCloud(
       // enemy types — twelve separate Points objects would be twelve draw calls
       // and twelve buffers to express what is really just a hue.
       const c = p[3] === 1 ? hi : (colorOverride ?? base);
-      colors[o] = c.r * tint;
-      colors[o + 1] = c.g * tint;
-      colors[o + 2] = c.b * tint;
+      const boost = colorOverride === undefined ? 1 : UNIT_INTENSITY;
+      colors[o] = c.r * tint * boost;
+      colors[o + 1] = c.g * tint * boost;
+      colors[o + 2] = c.b * tint * boost;
       o += 3;
     }
     cursor++;

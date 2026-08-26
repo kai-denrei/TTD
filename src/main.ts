@@ -6,7 +6,7 @@
 // went wrong in the PoC, where a 3,870-line tab fused sim and render.
 
 import * as THREE from 'three';
-import { makeWorld } from './core/sim/world.ts';
+import { makeWorld, HEART_MAX_HP } from './core/sim/world.ts';
 import { makeTuning } from './core/tuning/store.ts';
 import { makeStage } from './render/scene.ts';
 import { makeBoard, cellFromFaceIndex } from './render/board.ts';
@@ -19,6 +19,8 @@ import { TOWER_BY_KEY } from './core/sim/towerspec.ts';
 import { isFrontierWall } from './core/sphere/dungeon.ts';
 import { makeRenderTarget, readRenderState } from './render/bindings.ts';
 import { makeLoop } from './app/loop.ts';
+import { makeHitstop, traumaFor, dangerLevel, FEEL_DEFAULTS } from './app/feel.ts';
+import type { DangerLevel } from './app/feel.ts';
 import { makeCameraRig } from './app/cameras/registry.ts';
 import { makeInput } from './app/input.ts';
 import { makeHud } from './ui/hud.ts';
@@ -29,8 +31,11 @@ import { parsePresetParam } from './ui/admin/presets.ts';
 const canvas = document.querySelector<HTMLCanvasElement>('#scene');
 if (!canvas) throw new Error('#scene canvas missing');
 
-const app = document.querySelector<HTMLElement>('#app');
-if (!app) throw new Error('#app missing');
+const appMaybe = document.querySelector<HTMLElement>('#app');
+if (!appMaybe) throw new Error('#app missing');
+// Explicitly typed rather than relying on the narrowing above: frame() is a
+// hoisted function declaration, and TS does not carry the narrowing into it.
+const app: HTMLElement = appMaybe;
 
 const tuning = makeTuning();
 // Applied BEFORE makeWorld so the first tick already sees it — applying after
@@ -71,9 +76,9 @@ world.setMacro(true); // start in the build family
 // misuse and makes the app inspectable from a headless browser — which is the
 // only way to verify input plumbing that no unit test can reach.
 declare global {
-  interface Window { __ttd?: { world: typeof world; rig: typeof rig; input: typeof input; lastTap?: unknown; camPos?: [number, number, number] } }
+  interface Window { __ttd?: { world: typeof world; rig: typeof rig; input: typeof input; stage: typeof stage; lastTap?: unknown; camPos?: [number, number, number] } }
 }
-window.__ttd = { world, rig, input };
+window.__ttd = { world, rig, input, stage };
 
 function placeFromTap(tap: { x: number; y: number }): void {
   const ndc = new THREE.Vector2(
@@ -166,6 +171,8 @@ gate.onOpen(() => {
 });
 
 const renderTarget = makeRenderTarget();
+const hitstop = makeHitstop();
+let danger: DangerLevel = 0;
 let last = performance.now();
 
 function frame(now: number): void {
@@ -184,6 +191,9 @@ function frame(now: number): void {
   }
   for (const tap of input.drainTaps()) placeFromTap(tap);
 
+  // SIM TIME IS NEVER SCALED BY HITSTOP. Scaling it would make the same seed
+  // and inputs produce different telemetry depending on how many things
+  // exploded — precisely what the fixed timestep exists to prevent.
   loop.advance(frameSeconds);
 
   // LIVENESS: read every render lever through tuning.get() on every frame.
@@ -191,19 +201,43 @@ function frame(now: number): void {
   // Read BEFORE the rig updates so camera.shakeGain is current this frame.
   readRenderState(tuning, renderTarget);
 
+  // Drained ONCE — the buffer empties on read, so feel and effects share the
+  // array rather than racing for it.
+  const events = world.drainEvents();
+  const heartFrac = world.heartHp / HEART_MAX_HP;
+  danger = dangerLevel(heartFrac, danger);
+
+  for (const e of events) {
+    rig.addTrauma(traumaFor(e, heartFrac));
+    if (e.kind === 'heartHit') hitstop.punch(FEEL_DEFAULTS.hitstopHeart);
+    else if (e.kind === 'tankHit') hitstop.punch(FEEL_DEFAULTS.hitstopTank);
+    else if (e.kind === 'critterDied') hitstop.punch(FEEL_DEFAULTS.hitstopImpact);
+  }
+
+  // The danger state is spent on bloom: as the heart fails the whole board runs
+  // hotter. It costs nothing (bloom is already a per-frame value) and it is the
+  // cheapest honest way to make losing FEEL like losing rather than like a
+  // number going down. HUD carries a matching class for the same reason.
+  renderTarget.bloom.strength *= 1 + 0.18 * danger;
+  app.dataset['danger'] = String(danger);
+
+  // hitstop.update takes REAL frameSeconds — its own clock has to keep running
+  // or the freeze would never expire. It returns the scale for RENDER time.
+  const renderSeconds = frameSeconds * hitstop.update(frameSeconds);
+
   units.sync(world);
-  effects.sync(world.drainEvents(), world.projectiles, frameSeconds, renderTarget.fx);
+  effects.sync(events, world.projectiles, renderSeconds, renderTarget.fx);
   hud.sync(world);
   shop.sync();
   panel.sync();
-  rings.sync(frameSeconds);
+  rings.sync(renderSeconds);
   dashboard?.sync(world);
   if (loop.halted) hud.showRunOver(world.telemetry.summary());
 
   const tp = world.tank.pos;
   const tl = Math.hypot(tp[0], tp[1], tp[2]) || 1;
   const cam = rig.update(
-    Math.min(frameSeconds, 0.1),
+    Math.min(renderSeconds, 0.1),
     {
       anchor: tp,
       normal: [tp[0] / tl, tp[1] / tl, tp[2] / tl],

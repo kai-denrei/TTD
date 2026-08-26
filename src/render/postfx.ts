@@ -14,6 +14,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
+
 export type PostFx = {
   setSize(w: number, h: number): void;
   applyBloom(b: { strength: number; radius: number; threshold: number }): void;
@@ -31,6 +32,15 @@ export function makePostFx(
   const size = new THREE.Vector2(window.innerWidth, window.innerHeight);
   const bloom = new UnrealBloomPass(size, 0.8, 0.4, 0.5);
   composer.addPass(bloom);
+
+  // NO OutputPass, DELIBERATELY. It looks like the obvious missing piece of a
+  // post-processing chain, and it was added here once on exactly that
+  // reasoning. Measured with a pure-white probe surface: WITHOUT it white
+  // renders white; WITH it white renders dark grey. The renderer already has
+  // outputColorSpace 'srgb' and converts on the final blit, so OutputPass
+  // converts a second time and crushes everything.
+  //
+  // Do not re-add it without re-running that probe.
 
   return {
     setSize(w, h) {

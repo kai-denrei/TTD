@@ -35,7 +35,7 @@ const TRACER_GAP = 0.008;
 // additive, so pushing past 1 is how an effect clears the bloom threshold and
 // actually reads as a flash rather than a tinted dot. The terrain deliberately
 // sits below that threshold (M0c-1), so this is the whole contrast budget.
-const INTENSITY = 2.4;
+const INTENSITY = 3.4;
 
 const C_SHOT = new THREE.Color(0xffd08a);
 const C_IMPACT = new THREE.Color(0xfff4d6);

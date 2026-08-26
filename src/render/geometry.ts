@@ -48,16 +48,40 @@ export const WALL_HEIGHT = 0.045;
 // tried, and it looked worse than the dark version it was meant to fix. So the
 // board is deliberately dim and reads by CONTRAST OF RELIEF rather than by
 // brightness; the only things allowed to glow are the things that matter.
-const C_PATH: readonly [number, number, number] = [0x2c / 255, 0x4c / 255, 0x7c / 255];
-const C_ROOM: readonly [number, number, number] = [0x3a / 255, 0x63 / 255, 0x9c / 255];
-const C_WALLTOP: readonly [number, number, number] = [0x23 / 255, 0x2b / 255, 0x3d / 255];
+//
+// BUT NOT AS DIM AS IT WAS. These values are written straight into a vertex
+// colour buffer and used AS WRITTEN — there is no linear-to-sRGB brightening on
+// the way to the screen. So a 0.2 here really is 0.2 on the display, and the
+// board spent three milestones near-black because "safely under the 0.5 bloom
+// threshold" was being read as "must be very dark". Under the threshold is the
+// only constraint; the room between 0.2 and 0.5 was simply unused.
+//
+// M0c-3 raised every terrain tone as far as that ceiling allows. The board was
+// legible but murky, and the headroom was simply unused.
+//
+// THE REASON IT WAS MURKY: these values go straight into a vertex colour buffer
+// and are used AS WRITTEN — there is no linear-to-sRGB brightening on the way
+// to the screen, so a 0.2 here really is 0.2 on the display. "Safely under the
+// 0.5 bloom threshold" had been read as "must be very dark"; under the
+// threshold is the only constraint, and the room between 0.2 and 0.5 was simply
+// never used. Relief still carries the reading; there is now light to read by.
+//
+// The bloom ceiling is real, but it applies to the BUFFER value, not the
+// on-screen one — and gamma pre-compensation raises buffer values well above
+// what the constants read as. bloom.threshold moved to 0.8 for exactly this
+// reason: at 0.5 a legibly-lit floor blooms and washes the area to white.
+// Effects sit far above 0.8 (they carry a 2.4x intensity multiplier), so they
+// still glow while the terrain stays matte.
+const C_PATH = screenTone(0x3f5f8a);
+const C_ROOM = screenTone(0x4e76a8);
+const C_WALLTOP = screenTone(0x333b4c);
 // Buildable high ground — a wall that borders open floor. Only ~26% of walls
 // qualify (509 of 1964 on seed 7), and without a cue the other 74% are dead
 // clicks: you tap the rock and nothing happens, with nothing to tell you why.
 // A distinct top tone turns the placement rule into something you can read off
 // the board instead of discovering by trial.
-const C_WALLTOP_BUILD: readonly [number, number, number] = [0x3a / 255, 0x46 / 255, 0x63 / 255];
-const C_SKIRT: readonly [number, number, number] = [0x07 / 255, 0x0b / 255, 0x14 / 255];
+const C_WALLTOP_BUILD = screenTone(0x4d5a7a);
+const C_SKIRT = screenTone(0x0b1220);
 
 export type BoardGeometry = {
   positions: Float32Array;
@@ -67,6 +91,22 @@ export type BoardGeometry = {
 };
 
 type Vec = [number, number, number];
+
+/** Convert an intended ON-SCREEN colour into the value the vertex-colour
+ *  buffer needs.
+ *
+ *  Measured, not assumed: writing v into the colour attribute renders at
+ *  roughly v^2.2, because three's colour management treats the working space as
+ *  linear and the renderer converts on output. A wall authored at 0.31 was
+ *  landing near 0.12 on screen, which is why the board read as near-black
+ *  through three milestones of "just pick brighter paint".
+ *
+ *  Pre-applying the inverse means the constants below say what you will
+ *  actually see. Verified by sampling rendered pixels, not by eye. */
+function screenTone(hex: number): readonly [number, number, number] {
+  const g = (v: number): number => Math.pow(v / 255, 1 / 2.2);
+  return [g((hex >> 16) & 0xff), g((hex >> 8) & 0xff), g(hex & 0xff)];
+}
 
 export function buildBoardGeometry(
   mesh: SphereMesh,
