@@ -79,7 +79,9 @@ const DUNGEON_ROOMS = 12;
 const DUNGEON_ROOM_RADIUS = 4;
 const DUNGEON_EXTRA_CORRIDORS = 6;
 const DUNGEON_CORRIDOR_WIDTH = 1;
-const HEART_MAX_HP = 20;
+/** Exported so the renderer and HUD can express heart HP as a fraction
+ *  without duplicating the constant and silently drifting from it. */
+export const HEART_MAX_HP = 20;
 // How long (seconds) before the same critter can register another tank ram.
 // Without a cooldown, damage and hit counts accumulate on every tick the critter
 // stays inside the radius — a single pass could cost 30–50 ticks of HP.
