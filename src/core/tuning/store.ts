@@ -96,6 +96,7 @@ export function makeTuning(overrides?: Record<string, number>): TuningStore {
     for (const lever of LEVERS) {
       if (!group || lever.group === group) {
         values.set(lever.key, lever.value);
+        for (const fn of listeners) fn(lever.key, lever.value);
       }
     }
   }
@@ -115,7 +116,9 @@ export function makeTuning(overrides?: Record<string, number>): TuningStore {
       if (!lever) continue; // forward-compat: ignore unknown keys
       const num = parseFloat(raw);
       if (!isFinite(num)) continue;
-      values.set(key, clamp(num, lever.min, lever.max));
+      const clamped = clamp(num, lever.min, lever.max);
+      values.set(key, clamped);
+      for (const fn of listeners) fn(key, clamped);
     }
   }
 
