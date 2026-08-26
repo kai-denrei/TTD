@@ -134,7 +134,27 @@ export function planWave(wave: number, tuning: TuningStore, rng: Rng, gates: num
   // This needs real PORTALS — several spawn points placed around the board,
   // as the PoC has — not a scheduling lever. Until then a wave has one front.
   //
-  // ATTEMPTED AND REVERTED: gates spread greedily to the far side of the board.
+  // ATTEMPTED AND REVERTED TWICE. Recorded in full because the second attempt
+  // looked like it addressed the first attempt's flaw and did not.
+  //
+  // (2) Real PORTALS — three spawn points at 62% of the board's reach, spread
+  // greedily apart, with the tank starting AT THE HEART instead of at the spawn
+  // so it defends rather than camps the source. That is the correct design on
+  // paper and it lost 5/5 seeds where the shipped build wins 5/5.
+  //
+  // Every hypothesis was tested and none held. Staging the second front later
+  // did not help (gateOpenAt 20, so it never opens inside 12 waves: still 0/5).
+  // Money was not the constraint either — 4x bounty with easier HP growth still
+  // lost every seed. Tower siting was not it: the calibration heuristic was
+  // re-pointed at the portals and the numbers did not move.
+  //
+  // The real coupling is that the tank at the SPAWN was farming kills at a
+  // chokepoint, and that farm was quietly funding the whole economy. Moving it
+  // to the heart is better design and removes the funding, and no income lever
+  // tested closes the gap. Multi-front is therefore not a portals problem: it
+  // needs the economy re-derived for a tank that defends instead of farms.
+  //
+  // (1) Gates spread greedily to the far side of the board.
   // It made the mechanic expressible and made the GAME worse — critters walked
   // very long paths, so fewer fights happened anywhere near the tank or the
   // heart, and FIVE levers went dead in liveness (tank.fireRate among them,
