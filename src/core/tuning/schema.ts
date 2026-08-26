@@ -208,8 +208,8 @@ export const LEVERS: readonly Lever[] = [
     key: 'bloom.strength',
     group: 'feel',
     label: 'Bloom strength',
-    min: 0, max: 3, step: 0.05, value: 0.8,
-    help: 'Post-processing bloom intensity. Aesthetic only — no gameplay effect.',
+    min: 0, max: 3, step: 0.05, value: 1.5,
+    help: 'Post-processing bloom intensity. Raised from 0.8 in M0c-2: the terrain sits deliberately below the bloom threshold (see render/geometry.ts), so bloom brightens ONLY units, shots and impacts. At 0.8 combat was legible but muted, which was the original complaint. Aesthetic only — no gameplay effect.',
   },
   {
     key: 'bloom.radius',
@@ -224,6 +224,21 @@ export const LEVERS: readonly Lever[] = [
     label: 'Bloom threshold',
     min: 0, max: 1, step: 0.05, value: 0.5,
     help: 'Luminance threshold above which bloom is applied. Higher = only the brightest pixels bloom.',
+  },
+
+  {
+    key: 'fx.flashDur',
+    group: 'feel',
+    label: 'Flash duration (s)',
+    min: 0.02, max: 0.5, step: 0.01, value: 0.12,
+    help: 'Lifetime of muzzle flashes, hit flashes and tank beams. Short reads as a crisp snap; long smears the fight into a glow. Render-only — no gameplay effect.',
+  },
+  {
+    key: 'fx.burstSize',
+    group: 'feel',
+    label: 'Death burst size',
+    min: 0, max: 3, step: 0.1, value: 1,
+    help: 'Radius multiplier on the burst a critter throws when it dies. 0 removes death bursts entirely. Render-only — no gameplay effect.',
   },
 
   // ── camera ─────────────────────────────────────────────────────────────────

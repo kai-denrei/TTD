@@ -11,6 +11,7 @@ import { makeTuning } from './core/tuning/store.ts';
 import { makeStage } from './render/scene.ts';
 import { makeBoard, cellFromFaceIndex } from './render/board.ts';
 import { makeUnits } from './render/units.ts';
+import { makeEffects } from './render/effects.ts';
 import { makeRenderTarget, readRenderState } from './render/bindings.ts';
 import { makeLoop } from './app/loop.ts';
 import { makeCameraRig } from './app/cameras/registry.ts';
@@ -41,6 +42,11 @@ stage.scene.add(board);
 
 const units = makeUnits();
 stage.scene.add(units.group);
+
+// Combat effects read the event feed the simulation publishes each tick. This
+// is the channel M0b lacked entirely, which is why tower fire was invisible.
+const effects = makeEffects();
+stage.scene.add(effects.group);
 
 const rig = makeCameraRig();
 const input = makeInput(canvas, { isBuildFamily: () => rig.family === 'build' });
@@ -126,6 +132,7 @@ function frame(now: number): void {
   readRenderState(tuning, renderTarget);
 
   units.sync(world);
+  effects.sync(world.drainEvents(), world.projectiles, frameSeconds, renderTarget.fx);
   hud.sync(world);
   dashboard?.sync(world);
   if (loop.halted) hud.showRunOver(world.telemetry.summary());

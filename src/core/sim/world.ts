@@ -320,10 +320,11 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       }
     }
 
-    // 8c. Tank damage events
+    // 8c. Tank damage events (hitscan — the tank fires a beam, not a shot)
     for (const evt of tankEvents) {
       const c = critters.find((x) => x.id === evt.critterId);
       if (c === undefined) continue;
+      events.emit({ kind: 'beam', from: tank.pos, to: c.pos });
       const killed = hitCritter(c, evt.damage, tuning, elapsed);
       if (killed) {
         const ttk = elapsed - (c.firstHitAt ?? elapsed);

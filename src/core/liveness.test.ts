@@ -24,6 +24,8 @@ const RENDER_ONLY = new Set([
   'bloom.radius',
   'bloom.threshold',
   'shake.amount',
+  'fx.flashDur',
+  'fx.burstSize',
 ]);
 
 // God-mode levers: binary toggles — need targeted assertions, not a diff-telemetry check.

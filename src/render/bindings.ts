@@ -28,6 +28,7 @@
 export type RenderTarget = {
   bloom: { strength: number; radius: number; threshold: number };
   camera: { shakeGain: number };
+  fx: { flashDur: number; burstSize: number };
 };
 
 export type RenderBinding = {
@@ -42,6 +43,8 @@ export const RENDER_ONLY_KEYS: readonly string[] = [
   'bloom.radius',
   'bloom.threshold',
   'shake.amount',
+  'fx.flashDur',
+  'fx.burstSize',
 ];
 
 export const RENDER_BINDINGS: readonly RenderBinding[] = [
@@ -49,12 +52,15 @@ export const RENDER_BINDINGS: readonly RenderBinding[] = [
   { key: 'bloom.radius', apply: (t, v) => { t.bloom.radius = v; } },
   { key: 'bloom.threshold', apply: (t, v) => { t.bloom.threshold = v; } },
   { key: 'shake.amount', apply: (t, v) => { t.camera.shakeGain = v; } },
+  { key: 'fx.flashDur', apply: (t, v) => { t.fx.flashDur = v; } },
+  { key: 'fx.burstSize', apply: (t, v) => { t.fx.burstSize = v; } },
 ];
 
 export function makeRenderTarget(): RenderTarget {
   return {
     bloom: { strength: 0, radius: 0, threshold: 0 },
     camera: { shakeGain: 0 },
+    fx: { flashDur: 0, burstSize: 0 },
   };
 }
 
