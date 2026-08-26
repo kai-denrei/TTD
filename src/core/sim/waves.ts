@@ -17,13 +17,16 @@
 //    engaged   → breathing : overlap threshold met; starts counting wave.gap
 //    breathing → spawning  : gap timer expired; advance wave number, new plan
 //
-//  Overlap threshold:
+//  Overlap threshold (governs 0 <= overlap < 1 only):
 //    threshold = overlap * count
-//    overlap=0 → threshold=0 → wait until enemiesAlive <= 0 (full clear required)
-//    overlap=1 → threshold=count → enemiesAlive <= count always true once spawning
-//      starts → next wave triggers immediately (never waits)
-//    intermediate → triggers once enemiesAlive <= overlap*count
+//    overlap=0   → threshold=0  → wait until enemiesAlive <= 0 (full clear required)
+//    intermediate → triggers once the global enemiesAlive count drops to ≤ overlap*count
 //    e.g. overlap=0.75, count=10 → threshold=7.5 → next wave when 25% have died
+//    Note: 'count' is the current wave's size, not total alive; for small waves the
+//      bottom of the range is a dead zone (overlap=0.05, count=10 → threshold 0.5,
+//      which behaves identically to overlap=0 because enemiesAlive is always an integer).
+//    overlap >= 1: handled entirely by the spawning→breathing shortcut in makeWaveEngine;
+//      the engaged branch is unreachable at overlap=1 — the engine never enters 'engaged'.
 //
 //  Live reads: dripRate, dripJitter, overlap, gap, size, sizeGrowth, hpGrowth,
 //    and enemy.hp are all read from the store at plan/tick time — never captured.
@@ -137,10 +140,13 @@ export function makeWaveEngine(tuning: TuningStore, rng: Rng, gates: number[]): 
     }
 
     if (state === 'engaged') {
-      // Check overlap condition.
-      // threshold = overlap * count
-      // overlap=0 → 0 (full clear); overlap=1 → count (always triggers, handled
-      // via spawning→breathing shortcut above); intermediate → fraction of wave.
+      // Check overlap condition (only reached when overlap < 1).
+      // threshold = overlap * count  (0 <= overlap < 1)
+      // overlap=0   → threshold=0  → full clear required before advancing.
+      // overlap >= 1 → handled by the spawning→breathing shortcut; never reaches here.
+      // 'count' is the current wave's size; 'enemiesAlive' is the global live count.
+      // They are not comparable at face value — the threshold is a sizing signal
+      // derived from wave count, not a cap on total alive enemies.
       const plan = currentPlan!;
       const overlap = tuning.get('wave.overlap');
       const threshold = overlap * plan.count;

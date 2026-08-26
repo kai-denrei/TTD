@@ -137,7 +137,7 @@ export const LEVERS: readonly Lever[] = [
     group: 'player',
     label: 'Tower range',
     min: 0.05, max: 0.6, step: 0.025, value: 0.25,
-    help: 'Tower targeting radius in world chord distance. Typical cell spacing ~0.15; 0.25 covers ~2 cells.',
+    help: 'Tower targeting radius in world chord distance. Typical cell spacing ~0.07; 0.25 covers ~3–4 cells.',
   },
   {
     key: 'tower.rate',
@@ -172,7 +172,7 @@ export const LEVERS: readonly Lever[] = [
     group: 'player',
     label: 'Tank range',
     min: 0.05, max: 0.6, step: 0.025, value: 0.25,
-    help: 'Tank shot range in world chord distance. Typical cell spacing ~0.15; 0.25 covers ~2 cells.',
+    help: 'Tank shot range in world chord distance. Typical cell spacing ~0.07; 0.25 covers ~3–4 cells.',
   },
 
   // ── feel ───────────────────────────────────────────────────────────────────

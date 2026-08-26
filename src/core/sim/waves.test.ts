@@ -75,7 +75,7 @@ describe('waves', () => {
       for (let i = 0; i < 2000; i++) e.tick(0.1, { enemiesAlive: 5, onSpawn: () => {} });
       return e.wave;
     };
-    assert.ok(run(0.75) >= run(0.25), 'overlap=0.75 should complete >=waves vs overlap=0.25');
+    assert.ok(run(0.75) > run(0.25), 'overlap=0.75 should complete more waves than overlap=0.25');
   });
 
   test('the engine emits exactly count spawns per wave', () => {
