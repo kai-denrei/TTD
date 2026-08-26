@@ -90,6 +90,10 @@ export type World = {
   /** Contact radius used for tank ram detection (0.4 × mean chord length of the mesh).
    *  Exposed so tests can assert directly rather than inferring from kill counts. */
   tankContactRadius: number;
+  /** Mean cell width in world units. Cells are the unit spatial values are
+   *  authored in (tower range, projectile speed, enemy speed), so consumers
+   *  need this to convert rather than re-deriving it from tankContactRadius. */
+  meanChord: number;
   tick(dt: number, input: TankInput): void;
   /** Everything that happened during the last tick, as plain data. The renderer
    *  drains this to draw shots, impacts and deaths — M0b had no such channel,
@@ -126,6 +130,13 @@ export const HEART_MAX_HP = 20;
 // 0.5 s gives one event per critter encounter and makes tankHits an event count
 // comparable to heartHits (both are per-crossing, not per-tick).
 const TANK_CONTACT_COOLDOWN = 0.5;
+/** Converts a reference bounty (3-45, authored against enemies with 20-500 HP)
+ *  into TTD's economy, where a tower costs 40-220 and a run should support
+ *  roughly thirty of them. Measured: at this scale a winning run earns ~1800
+ *  credit; at 8x that it earns ~13,000 and buys a hundred towers, at which
+ *  point placement stops being a decision. Kept separate from the eco.bounty
+ *  lever so the lever reads as a plain multiplier on the authored value. */
+const BOUNTY_SCALE = 0.125;
 
 export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   const { seed, tuning } = opts;
@@ -135,7 +146,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
    *  more than a phage. Bounties are FLAT across waves by design — money
    *  tightens automatically as counts rise. */
   const bountyFor = (c: Critter): number =>
-    (ENEMY_BY_TYPE.get(c.type)?.bounty ?? 1) * (tuning.get('eco.bounty') / 8);
+    (ENEMY_BY_TYPE.get(c.type)?.bounty ?? 1) * BOUNTY_SCALE * tuning.get('eco.bounty');
 
   // ── Static geometry (uses its own named RNG streams internally) ──────────
   const mesh: SphereMesh = generateSphereMesh({ seed, points: MESH_POINTS, relaxIters: MESH_RELAX });
@@ -284,6 +295,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       if (!c.alive) continue;
       const result = stepCritter(c, dt, {
         mesh, dungeon, tuning, rng: crittersRng, now: elapsed,
+        cellSize: meanChord,
         aura: auraBoost(c, critters),
       });
       if (result === 'arrived') {
@@ -604,6 +616,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     waves,
     get elapsed() { return elapsed; },
     tankContactRadius,
+    meanChord,
     tick,
     drainEvents: () => events.drain(),
     placeTower,

@@ -2,9 +2,21 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runHeadless, meanSummaries } from './runner.ts';
 
+// A configuration where the heart is CERTAIN to die inside the tick budget.
+// These tests are about truncation mechanics — that a run stops at death and
+// does not accrue telemetry afterwards — not about whether the shipped
+// defaults are survivable. Once M0c-3's calibration made the defaults winnable,
+// tests that assumed "the heart always dies in 100 seconds" started failing for
+// the best possible reason.
+// Overlap 1 and gap 0 are what make it certain: waves stop waiting for a clear,
+// so pressure compounds instead of arriving in survivable batches. Measured:
+// the heart dies at t=31s, comfortably inside a 100s budget.
+const DOOMED =
+  'enemy.speed=3;wave.size=40;wave.dripRate=0.1;wave.buildTime=0;wave.overlap=1;wave.gap=0';
+
 describe('runHeadless', () => {
   test('truncates at heart death by default', () => {
-    const r = runHeadless({ seed: 42, input: 'patrol', maxTicks: 6000 });
+    const r = runHeadless({ seed: 42, input: 'patrol', maxTicks: 6000, towers: 'none', preset: DOOMED });
     assert.equal(r.stoppedEarly, true, 'heart should die within 6000 ticks at default tuning');
     assert.ok(r.ticksRun < 6000, `ran ${r.ticksRun} ticks; expected truncation`);
     assert.ok(
@@ -14,7 +26,7 @@ describe('runHeadless', () => {
   });
 
   test('runs the full budget when stopAtDeath is false', () => {
-    const r = runHeadless({ seed: 42, input: 'patrol', maxTicks: 6000, stopAtDeath: false });
+    const r = runHeadless({ seed: 42, input: 'patrol', maxTicks: 6000, stopAtDeath: false, towers: 'none', preset: DOOMED });
     assert.equal(r.ticksRun, 6000);
     assert.equal(r.stoppedEarly, false);
     assert.ok(r.summary['elapsed']! > r.summary['survivedFor']! + 1);
@@ -28,8 +40,8 @@ describe('runHeadless', () => {
   });
 
   test('a preset string changes the outcome', () => {
-    const slow = runHeadless({ seed: 42, input: 'patrol', maxTicks: 6000, preset: 'enemy.speed=0.3' });
-    const fast = runHeadless({ seed: 42, input: 'patrol', maxTicks: 6000, preset: 'enemy.speed=3.0' });
+    const slow = runHeadless({ seed: 42, input: 'patrol', maxTicks: 6000, towers: 'none', preset: `${DOOMED};enemy.speed=0.3` });
+    const fast = runHeadless({ seed: 42, input: 'patrol', maxTicks: 6000, towers: 'none', preset: `${DOOMED};enemy.speed=3.0` });
     assert.notDeepEqual(slow.summary, fast.summary);
     assert.ok(
       slow.summary['survivedFor']! > fast.summary['survivedFor']!,
@@ -45,7 +57,7 @@ describe('runHeadless', () => {
     // finding CLAUDE.md records ("every current setting loses with one tower"),
     // not a defect — but it makes default tuning useless for asserting that the
     // `towers` option is honoured, which is what this test is actually about.
-    const preset = 'tower.damage=20';
+    const preset = `${DOOMED};tower.damage=8`;
     const none = runHeadless({ seed: 42, input: 'idle', maxTicks: 6000, towers: 'none', preset });
     const heart = runHeadless({ seed: 42, input: 'idle', maxTicks: 6000, towers: 'heart', preset });
     assert.equal(none.summary['towerKillShare'], 0, 'no tower means no tower kills');

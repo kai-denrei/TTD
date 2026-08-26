@@ -194,6 +194,9 @@ export function stepCritter(
   dt: number,
   ctx: {
     mesh: SphereMesh; dungeon: Dungeon; tuning: TuningStore; rng: Rng; now: number;
+    /** Mean cell width in world units. enemy.speed is CELLS per second, so
+     *  movement converts through this. */
+    cellSize: number;
     /** Speed multiplier from nearby aura carriers; 1 when there are none. */
     aura?: number;
   },
@@ -278,8 +281,21 @@ export function stepCritter(
     c.prog = 0;
   }
 
+  // enemy.speed is CELLS PER SECOND, not world units per second.
+  //
+  // This was world units for four milestones and it quietly broke the genre. A
+  // cell is ~0.068 world units, so speed 1.0 meant ~15 cells/second: a critter
+  // crossed a tower's entire 3.7-cell range in a quarter of a second. Measured
+  // consequence — towers fired 60 shots and landed ONE, a 1.7% hit rate, and a
+  // simulated competent player lost every seed by wave 3 with the towers
+  // contributing zero kills. The PoC moves critters at ~1 cell/s against shots
+  // at 20 cells/s; TTD had that ratio at 2:1.
+  //
+  // Cells are the unit every other spatial number here is authored in (tower
+  // range, projectile speed, splash radius), so this makes speed agree with
+  // them instead of being the one value in a different scale.
   const speed = effectiveSpeed(c, tuning, ctx.aura ?? 1);
-  let budget = speed * dt; // world-distance budget this tick
+  let budget = speed * ctx.cellSize * dt; // world-distance budget this tick
 
   // Carry leftover distance across multiple cell arrivals in one tick
   while (budget > 0) {

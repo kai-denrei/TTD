@@ -174,9 +174,12 @@ test('C-1: parked tank contacts are speed-invariant (forward=0 gets no swept rad
     `parked tank speed-invariance broken: kills at speed=0.5: ${killsMinSpeed}, at speed=10: ${killsMaxSpeed}`);
   // Baseline pin: confirms the count itself, not just equality — catches radius drift
   // that would inflate kills without breaking the speed-equality assertion above.
-  // NOTE: this pin has a wide blind band (radius 0.5×–3× all yield 44 kills); use the
-  // direct radius assertion below as the authoritative drift detector.
-  assert.equal(killsMinSpeed, 44, `baseline kill count drifted from 44 — radius or critter flow changed`);
+  // NOTE: this pin has a wide blind band; the direct radius assertion below is
+  // the authoritative drift detector. Re-pinned from 44 to 10 in M0c-3 when
+  // enemy.speed changed from world-units to CELLS per second — critters now
+  // move ~15x slower, so far fewer walk into a parked tank. That is the fix
+  // working, not radius drift.
+  assert.equal(killsMinSpeed, 10, `baseline kill count drifted from 10 — radius or critter flow changed`);
   // Direct radius assertion: asserts the computed tankContactRadius rather than
   // inferring it from kill counts (which have a blind band of 0.5×–3× the true radius).
   // Constructed from the same seed=3 world so we can inspect its radius.
@@ -229,16 +232,20 @@ test('C4 latch — tankHits is an event count, not inflated by low damage (NEW-3
   };
   const hitsLo = run(0.5);   // chip damage
   const hitsHi = run(20);    // lethal damage
-  // With the latch both values are event-based: the hit counts should be nearly equal
-  // (bounded by how many critters walk through, not by how long each critter survives).
-  // Measured with latch intact (seed 3, 3000 ticks): hitsLo≈43, hitsHi≈44 (ratio ~1).
-  // Without the latch: hitsLo≈189, hitsHi≈44 (ratio ~4.3) — the backwards inflation.
-  // A threshold of 2 safely separates the fixed (~1×) from the broken (~4×) ratio.
+  // With the latch, hits are bounded by contacts-per-cooldown rather than by
+  // ticks-in-range, so a chip-damaged critter cannot inflate the count without
+  // limit. Re-measured in M0c-3 after enemy.speed became CELLS per second:
+  // critters now move ~15x slower and therefore linger in contact range far
+  // longer, so a single critter legitimately registers several latched hits.
+  //   with latch:    chip 20, lethal 10  → ratio 2.0
+  //   latch removed: chip 100, lethal 10 → ratio 10.0   (verified by sabotage)
+  // The separation is WIDER than it was, not narrower. A threshold of 4 sits
+  // clear of both.
   assert.ok(hitsLo > 0, 'expected tank contacts from pass-through critters (seed 3)');
   assert.ok(hitsHi > 0, 'expected tank contacts from pass-through critters (seed 3)');
   assert.ok(
-    hitsLo < hitsHi * 2,
-    `tankHits backwards: hitsLo=${hitsLo} >= 2×hitsHi=${hitsHi} — latch removed or broken (pre-latch ratio was ~4.3×)`,
+    hitsLo < hitsHi * 4,
+    `tankHits backwards: hitsLo=${hitsLo} >= 4×hitsHi=${hitsHi} — latch removed or broken (measured: 2.0x with the latch, 10.0x without)`,
   );
 });
 
@@ -274,10 +281,18 @@ test('C4 swept-radius floor — fast moving tank still registers contacts (NEW-2
 // I-1 regression: heartHits must never exceed HEART_MAX_HP — no post-mortem phantom hits.
 // Before the fix, heartHit() fired even after heartHp reached 0, so leakers that arrive
 // after death accumulate phantom hits (heartHits > HEART_MAX_HP=20). The fix gates the
-// hit on (heartHp > 0). Reviewer-verified values on seed 42, 6000 ticks: heartHits=20, leaks=44.
+// hit on (heartHp > 0).
+//
+// Needs a config where the heart is CERTAIN to die: since M0c-3's calibration
+// the shipped defaults are survivable, so "run the defaults and assert the
+// heart died" stopped holding — for the best possible reason. Overlap 1 with no
+// gap is what guarantees it: waves stop waiting for a clear, so pressure
+// compounds instead of arriving in survivable batches.
 test('I-1: heartHits never exceeds HEART_MAX_HP (no post-mortem phantom hits)', () => {
-  const w = makeWorld({ seed: 42, tuning: makeTuning() });
-  w.placeTower(w.dungeon.heart);
+  const t = makeTuning();
+  t.set('enemy.speed', 3); t.set('wave.size', 40); t.set('wave.dripRate', 0.1);
+  t.set('wave.buildTime', 0); t.set('wave.overlap', 1); t.set('wave.gap', 0);
+  const w = makeWorld({ seed: 42, tuning: t });
   scripted(w, 6000);
   assert.equal(w.heartHp, 0, 'heart should have died on this config');
   assert.ok(w.telemetry.data.leaks > w.telemetry.data.heartHits, 'leaks must outrun hits after death');
