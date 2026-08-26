@@ -72,8 +72,11 @@ describe('liveness — every sim lever must move the telemetry needle', () => {
     const w = makeWorld({ seed: 42, tuning: t });
     const hp0 = w.tank.hp;
     // Move tank through enemy territory so it collides with critters.
-    // (Stationary at spawn won't get hits because critters spawn adjacent and
-    // walk away toward heart — they never return to within contact radius.)
+    // (Stationary at spawn won't get hits on seed 42 specifically — on that seed
+    // all gates have distToHeart <= distToHeart[spawn], so critters always walk
+    // away from spawn toward the heart and never return to the contact zone.
+    // On ~11% of seeds (e.g. seed 3, seed 57) some gates have distToHeart >
+    // distToHeart[spawn], so critters do walk through spawn; seed 42 avoids that.)
     for (let i = 0; i < 8000; i++) w.tick(1 / 60, { forward: 1, turn: Math.sin(i / 30), fire: false });
     assert.ok(w.telemetry.data.tankHits > 0, 'tank was never hit');
     assert.equal(w.tank.hp, hp0, 'tank HP changed despite god mode');

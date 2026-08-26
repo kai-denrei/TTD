@@ -24,7 +24,7 @@ for (let i = 0; i < steps; i++) {
   const w = makeWorld({ seed: 42, tuning: t });
   w.placeTower(w.dungeon.heart);
   for (let k = 0; k < 6000; k++) {
-    w.tick(1 / 60, { forward: (k % 120) < 60 ? 1 : -1, turn: Math.sin(k / 30), fire: k % 45 === 0 });
+    w.tick(1 / 60, { forward: (k % 120) < 60 ? 1 : -1, turn: Math.sin(k / 30), fire: k % 5 === 0 });
   }
   rows.push({ [key]: +v.toFixed(3), ...w.telemetry.summary() });
 }

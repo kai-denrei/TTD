@@ -72,6 +72,12 @@ const DUNGEON_ROOM_RADIUS = 4;
 const DUNGEON_EXTRA_CORRIDORS = 6;
 const DUNGEON_CORRIDOR_WIDTH = 1;
 const HEART_MAX_HP = 20;
+// How long (seconds) before the same critter can register another tank ram.
+// Without a cooldown, damage and hit counts accumulate on every tick the critter
+// stays inside the radius — a single pass could cost 30–50 ticks of HP.
+// 0.5 s gives one event per critter encounter and makes tankHits an event count
+// comparable to heartHits (both are per-crossing, not per-tick).
+const TANK_CONTACT_COOLDOWN = 0.5;
 
 export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   const { seed, tuning } = opts;
@@ -96,8 +102,9 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   //     so 0.027 keeps spawned critters outside the contact zone.
   //   - A critter must travel ~0.4 of a cell before it can trigger a ram hit,
   //     which prevents spawn-adjacent auto-kills regardless of seed.
-  //   - If tank.damage >= enemy.hp the ram still one-shots (two hits, but critter
-  //     never leaves the radius); keep default damage < default hp to avoid that.
+  //   - Contact damage fires at most once per TANK_CONTACT_COOLDOWN seconds per
+  //     critter (see step 7d), so a single pass registers exactly one event
+  //     regardless of how long the critter spends inside the radius.
   let edgeSum = 0;
   let edgeCount = 0;
   for (let i = 0; i < mesh.centers.length; i++) {
@@ -249,13 +256,24 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     }
 
     // 7d. Contact damage to tank (critters that reach the tank's position)
+    // Swept-motion floor: the point test below samples once per tick, but the tank
+    // translates tank.speed*dt in that time. Without this floor a fast tank tunnels
+    // straight through critters — at tank.speed 10 the step is 6x the static radius
+    // and 100% of contacts were missed. Half the step keeps the sampled disc
+    // overlapping between consecutive ticks.
+    const r = Math.max(tankContactRadius, 0.5 * tuning.get('tank.speed') * dt);
     for (const c of critters) {
       if (!c.alive) continue;
+      // Contact latch: only register a new ram event when the cooldown has expired.
+      // This makes tankHits an event count (one per critter encounter), comparable
+      // to heartHits, and prevents per-tick HP drain during a single pass-through.
+      if (c.contactLeft > 0) continue;
       const dx = c.pos[0] - tank.pos[0];
       const dy = c.pos[1] - tank.pos[1];
       const dz = c.pos[2] - tank.pos[2];
       const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (d <= tankContactRadius) {
+      if (d <= r) {
+        c.contactLeft = TANK_CONTACT_COOLDOWN;
         telemetry.tankHit();
         tank.hits += 1;
         if (!tuning.flag('god.tankInvulnerable')) { tank.hp -= 1; if (tank.hp < 0) tank.hp = 0; }

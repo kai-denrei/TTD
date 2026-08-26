@@ -34,6 +34,8 @@ export type Critter = {
   // hit reaction
   reactMult: number;  // 1 when idle, accelOnHit when reacting
   reactLeft: number;  // seconds remaining in the reaction
+  // tank contact cooldown
+  contactLeft: number; // seconds remaining before this critter can ram the tank again (0 = ready)
   bornAt: number;
 };
 
@@ -121,6 +123,7 @@ export function spawnCritter(
     pos: [0, 0, 0],
     envPhase, envValue: 1, envTarget, envLeft: envPhase,
     reactMult: 1, reactLeft: 0,
+    contactLeft: 0,
     bornAt: now,
   };
   return c;
@@ -161,13 +164,17 @@ export function stepCritter(
     c.envValue = Math.max(1 - amp, Math.min(1 + amp, c.envValue));
   }
 
-  // ── 2. Update hit reaction timer ──────────────────────────────────────────
+  // ── 2. Update hit reaction timer and tank contact cooldown ───────────────
   if (c.reactLeft > 0) {
     c.reactLeft -= dt;
     if (c.reactLeft <= 0) {
       c.reactLeft = 0;
       c.reactMult = 1;
     }
+  }
+  if (c.contactLeft > 0) {
+    c.contactLeft -= dt;
+    if (c.contactLeft < 0) c.contactLeft = 0;
   }
 
   // ── 3. Move along nav graph ───────────────────────────────────────────────
