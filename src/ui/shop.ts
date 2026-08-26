@@ -30,7 +30,7 @@
 // frame buys nothing and costs a layout pass against the bloom chain.
 
 import {
-  TOWER_ORDER, TOWER_BY_KEY, MAX_TIER, upgradeCost, effectiveStats,
+  TOWER_ORDER, TOWER_BY_KEY, MAX_TIER, upgradeCost, effectiveStats, unlockedKeys,
 } from '../core/sim/towerspec.ts';
 import type { TowerSpec } from '../core/sim/towerspec.ts';
 import type { World } from '../core/sim/world.ts';
@@ -168,13 +168,18 @@ export function makeShop(world: World, root: HTMLElement): Shop {
     const row = target.closest<HTMLElement>('.shop-row');
     const key = row?.dataset['key'];
     if (key === undefined || key === selectedKey) return;
+    // A locked row is readable and inert: tapping it must not arm a purchase
+    // that placeTower would then refuse, which would read as the shop lying.
+    if (row?.classList.contains('is-locked') === true) return;
     selectedKey = key;
     paintSelection();
   });
 
   const creditNode = credit.querySelector<HTMLElement>('[data-f="credit"]');
   let lastCredit = '';
-  const lastAfford = new Map<string, Affordability>();
+  // Keyed on a composite of lock+affordability, not affordability alone: a row
+  // that becomes locked while staying unaffordable still needs a repaint.
+  const lastRowState = new Map<string, string>();
   let lastSelected = '';
 
   function paintSelection(): void {
@@ -192,12 +197,25 @@ export function makeShop(world: World, root: HTMLElement): Shop {
       lastCredit = text;
       if (creditNode !== null) creditNode.textContent = text;
     }
+    // Locked towers are shown but not selectable. Both references introduce one
+    // new tower per wave rather than opening the shop at once — a player handed
+    // eight towers on wave 1 has to evaluate a matrix; a player handed a second
+    // tower on wave 2 has to answer a question. Showing the locked rows is the
+    // point: you can see what is coming and plan the credit for it.
+    const unlocked = new Set(unlockedKeys(world.waves.wave));
     for (const row of rows) {
+      const locked = !unlocked.has(row.spec.key);
       const aff = affordability(c, row.spec.cost);
-      if (lastAfford.get(row.spec.key) === aff) continue;
-      lastAfford.set(row.spec.key, aff);
-      row.node.classList.toggle('is-poor', aff === 'tooExpensive');
+      const state = `${locked ? 'L' : 'u'}${aff}`;
+      if (lastRowState.get(row.spec.key) === state) continue;
+      lastRowState.set(row.spec.key, state);
+      row.node.classList.toggle('is-locked', locked);
+      row.node.classList.toggle('is-poor', !locked && aff === 'tooExpensive');
     }
+    // If the wave rolled back past the selection (or the run restarted), fall
+    // back to a tower that is actually available rather than silently selling
+    // the player something placeTower will refuse.
+    if (!unlocked.has(selectedKey)) selectedKey = TOWER_ORDER[0]!;
     paintSelection();
   }
 

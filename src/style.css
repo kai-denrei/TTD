@@ -125,3 +125,40 @@ html, body, #app { height: 100%; margin: 0; background: #05070c; overflow: hidde
 .admin-note { flex: 1 1 100%; color: #6b7ea3; line-height: 1.5; }
 .cmp-h { color: #cfe0ff; border-bottom: 1px solid #22304d; }
 .cmp-d { color: #5aa0ff; }
+
+/* ── tower shop ─────────────────────────────────────────────────────────────
+   Bottom strip, horizontally scrollable: eight rows stacked would eat a third
+   of a phone screen, and this sits over a game that has to stay readable. */
+.shop {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 12;
+  display: flex; flex-direction: column; gap: 4px; padding: 6px 8px 8px;
+  background: linear-gradient(to top, rgba(5, 7, 12, 0.92), rgba(5, 7, 12, 0));
+  font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #9fb3d9; touch-action: manipulation;
+}
+.shop-credit { text-align: center; letter-spacing: 1px; text-shadow: 0 0 6px #05070c; }
+.shop-credit b { color: #7ee0a8; font-size: 15px; }
+.shop-list {
+  display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden;
+  touch-action: pan-x; scrollbar-width: none; padding-bottom: 2px;
+}
+.shop-list::-webkit-scrollbar { display: none; }
+.shop-row {
+  flex: 0 0 auto; min-width: 138px; display: grid;
+  grid-template-columns: 1fr auto; grid-template-areas: "name cost" "stat stat";
+  gap: 1px 8px; padding: 5px 8px; text-align: left; cursor: pointer;
+  background: rgba(13, 20, 36, 0.86); color: #cfe0ff;
+  border: 1px solid #22304d; border-radius: 4px; font: inherit;
+}
+.shop-name { grid-area: name; color: #e6edfb; white-space: nowrap; }
+.shop-cost { grid-area: cost; color: #7ee0a8; }
+.shop-stat { grid-area: stat; color: #6b7ea3; white-space: nowrap; }
+.shop-row.is-selected { border-color: #6fe6ff; background: #16203a; box-shadow: 0 0 8px rgba(111, 230, 255, 0.35); }
+/* Dimmed, never hidden: an unaffordable tower is what the next forty credits
+   are FOR. Kept above 40% so it stays readable. */
+.shop-row.is-poor { opacity: 0.45; }
+.shop-row.is-poor .shop-cost { color: #b45a5a; }
+/* Locked rows are shown deliberately — seeing what wave 5 unlocks is how you
+   decide whether to save. Inert, but never invisible. */
+.shop-row.is-locked { opacity: 0.3; cursor: default; border-style: dashed; }
+.shop-row.is-locked .shop-cost { color: #55637d; }

@@ -12,6 +12,10 @@ import { makeStage } from './render/scene.ts';
 import { makeBoard, cellFromFaceIndex } from './render/board.ts';
 import { makeUnits } from './render/units.ts';
 import { makeEffects } from './render/effects.ts';
+import { makeRings } from './render/rings.ts';
+import { makeShop, cellSize, rangeWorld } from './ui/shop.ts';
+import { TOWER_BY_KEY } from './core/sim/towerspec.ts';
+import { isFrontierWall } from './core/sphere/dungeon.ts';
 import { makeRenderTarget, readRenderState } from './render/bindings.ts';
 import { makeLoop } from './app/loop.ts';
 import { makeCameraRig } from './app/cameras/registry.ts';
@@ -48,6 +52,9 @@ stage.scene.add(units.group);
 const effects = makeEffects();
 stage.scene.add(effects.group);
 
+const rings = makeRings();
+stage.scene.add(rings.group);
+
 const rig = makeCameraRig();
 const input = makeInput(canvas, { isBuildFamily: () => rig.family === 'build' });
 const raycaster = new THREE.Raycaster();
@@ -81,9 +88,29 @@ function placeFromTap(tap: { x: number; y: number }): void {
     window.__ttd.lastTap = { tap, hitName: hit?.object.name ?? null, faceIndex: faceIndex ?? null, cell };
   }
   if (hit === undefined || cell < 0) return;
-  // world.placeTower already refuses BLOCKED and occupied cells and counts a
-  // decision only on success — that rule stays owned in one place.
-  if (!world.placeTower(cell)) rig.addTrauma(0.12); // a small refusal nudge
+
+  // Tapping a tower you already own inspects it: a sticky ring showing exactly
+  // what it covers. This is the common reason to tap a wall you have built on.
+  const standing = world.towers.find((t) => t.cell === cell);
+  if (standing !== undefined) {
+    showRange(cell, standing.key, standing.tier, 0);
+    return;
+  }
+
+  if (world.placeTower(cell, shop.selectedKey)) {
+    showRange(cell, shop.selectedKey, 0, 0); // sticky: what you just bought
+    return;
+  }
+
+  // Refused. Only draw the "what it would have covered" ring when the cell was
+  // genuinely BUILDABLE — i.e. the refusal was about money, not placement.
+  // Flashing a range ring over solid rock answers a question nobody asked and
+  // reads as noise; flashing it over valid high ground you cannot yet afford
+  // is the shop telling you what the next forty credits buy.
+  rig.addTrauma(0.12);
+  if (isFrontierWall(world.mesh, world.dungeon, cell)) {
+    showRange(cell, shop.selectedKey, 0, 0.6);
+  }
 }
 
 const loop = makeLoop({
@@ -92,6 +119,19 @@ const loop = makeLoop({
 });
 
 const hud = makeHud(app);
+const shop = makeShop(world, app);
+/** World units per cell — the unit tower ranges are authored in. */
+const CELL = cellSize(world);
+
+/** Draw the range a tower of `key` at `tier` actually covers from `cell`.
+ *  tower.range is read LIVE here, never captured: a ring drawn from a stale
+ *  lever is a picture of a tower that does not exist. */
+function showRange(cell: number, key: string, tier: number, ttl: number): void {
+  const spec = TOWER_BY_KEY.get(key);
+  const pos = world.mesh.centers[cell];
+  if (spec === undefined || pos === undefined) return;
+  rings.show(pos, rangeWorld(spec, tier, CELL, tuning.get('tower.range')), spec.color, ttl);
+}
 
 // Admin Mode is a leaf: nothing in core/ or render/ imports it, and the
 // dashboard is only constructed once the gate actually opens.
@@ -134,6 +174,8 @@ function frame(now: number): void {
   units.sync(world);
   effects.sync(world.drainEvents(), world.projectiles, frameSeconds, renderTarget.fx);
   hud.sync(world);
+  shop.sync();
+  rings.sync(frameSeconds);
   dashboard?.sync(world);
   if (loop.halted) hud.showRunOver(world.telemetry.summary());
 

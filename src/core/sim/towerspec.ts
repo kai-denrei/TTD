@@ -117,6 +117,18 @@ export const TOWER_ORDER: readonly string[] = [
   'single', 'rapid', 'spread', 'slow', 'homing', 'aoe', 'sniper', 'laser',
 ];
 
+/** Which towers wave `wave` has unlocked: the first N of TOWER_ORDER.
+ *
+ *  Both references introduce ONE NEW IDEA PER WAVE rather than opening the
+ *  whole shop at once, and that pacing is most of what makes early waves
+ *  teach instead of overwhelm. A player handed eight towers on wave 1 has to
+ *  evaluate a matrix; a player handed a second tower on wave 2 has to answer a
+ *  question. */
+export function unlockedKeys(wave: number): readonly string[] {
+  const n = Math.max(1, Math.min(TOWER_ORDER.length, Math.floor(wave)));
+  return TOWER_ORDER.slice(0, n);
+}
+
 export const MAX_TIER = 2;
 
 /** Cost to move a tower from `tier` to `tier + 1`, or null at max tier.

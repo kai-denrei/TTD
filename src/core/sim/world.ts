@@ -43,7 +43,7 @@ import { makeTelemetry } from './telemetry.ts';
 import { makeEventBuffer } from './events.ts';
 import { makeEconomy } from './economy.ts';
 import type { Economy } from './economy.ts';
-import { TOWER_BY_KEY, sellRefund } from './towerspec.ts';
+import { TOWER_BY_KEY, sellRefund, unlockedKeys } from './towerspec.ts';
 import { ENEMY_BY_TYPE } from './enemyspec.ts';
 import type { WorldEvent } from './events.ts';
 import type { Rng } from './rng.ts';
@@ -506,6 +506,11 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
 
     const spec = TOWER_BY_KEY.get(key);
     if (spec === undefined) return false;
+    // The unlock ladder is enforced HERE, not only in the shop. A rule that
+    // lives solely in the UI is a suggestion: any other caller — a preset, a
+    // test, a future auto-builder — walks straight past it, and the ladder that
+    // paces the whole early game becomes decoration.
+    if (!unlockedKeys(waves.wave).includes(key)) return false;
     // Charged LAST, after every other check, so a refused placement never
     // takes money. Ordering matters here: a rule added later above this line
     // is free, one added below it silently bills for nothing.
