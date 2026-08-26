@@ -99,41 +99,36 @@ collision into an explicit failure rather than a surprise. 5144 pairs with the
 
 ## State
 
-**M0a (brain), M0b (rig visible), M0c-1 (walls) and M0c-2 (combat visible) are
-complete** — 293 tests, determinism verified. `npm run dev` on **port 5144**
-(pinned; 5173 is taken by another project) serves a 3D maze board where towers
-fire visible travelling shots that can miss, the tank fires along its barrel
-with heat and lockout, and impacts, deaths and beams all render.
+**M0a–M0c-3 complete** — 415 tests, determinism verified. `npm run dev` on
+**port 5144** (pinned; 5173 belongs to another project) serves a playable tower
+defense: a 3D maze board, eight towers with genuinely different attacks, twelve
+enemy types, an economy where towers cost credit and leaks break your streak, a
+build phase, an unlock ladder, upgrade/sell, range rings, and a win condition.
 
-**Next: M0c chunk 3 — tower roster & economy.** Types with distinct attacks
-(splash and mortar arcs come with the types that use them), cost, sell,
-upgrade, range rings. Economy and win condition follow that. Balancing what you
-cannot see or steer is the mistake that started this milestone.
+**Next:** wave pacing (authored per-wave composition, surges, the multi-front
+opening the references use after waves 6 and 9), audio (M3 — the highest
+felt-impact item in vision §6.5), and the portal/dive spine.
 
-**The dashboard is Admin Mode — internal tooling, never shipped to players.**
-Gated by `?admin=1`, backtick, or a five-tap top-left corner; `src/ui/admin/` is
-a leaf nothing in `core/` or `render/` imports.
+**The dashboard is Admin Mode** — internal tooling, gated by `?admin=1`,
+backtick, or a five-tap top-left corner. `src/ui/admin/` is a leaf.
 
 Known state when tuning — full detail in `docs/05-M0c-notes.md`:
 
-- **`survivedFor` is the difficulty signal.** `heartHits` is not: runs truncate
-  at heart death, so it saturates at the heart's 20 HP.
-- **`playerKillShare` is uninformative in sweeps.** Aimed fire means the
-  scripted patrol — which sweeps its heading and never points at anything —
-  kills nothing. Read it from played sessions, or teach the script to aim.
-  Spec §5 calls it the sharpest single number in M0, so this matters.
-- **FIVE levers are limited by one root cause: the default offence cannot
-  complete a kill.** `tower.damage`, `tank.damage`, `tower.rate`, `enemy.hp`
-  and `wave.hpGrowth` all need companion overrides. `wave.hpGrowth` needs the
-  *opposite* companion to the others — damage low enough that HP still matters.
-  This is the strongest standing signal that the combat defaults are wrong.
-- **Tower placement is currently a decision with little consequence** at
-  default stats, though projectiles narrowed the gap.
-- **Terrain sits under the bloom threshold** by design; only emissive things
-  glow. That is why `bloom.strength` can be raised without washing out the board.
-- **A constant ported from the PoC is in the PoC's units until proven
-  otherwise** — `projSpeed` was wrong by ~5x for exactly this reason.
-- **Compare is a three-seed mean, not a truth.** Critters share one RNG stream.
+- **`survivedFor` is the difficulty signal**; `heartHits` saturates at heart HP.
+- **Terrain colours are gamma pre-compensated** (`screenTone` in
+  render/geometry.ts). Values land on screen at ~v^2.2 without it, which is why
+  the board read near-black for three milestones. Do NOT add an `OutputPass` —
+  measured, it double-converts and crushes everything.
+- **The bloom threshold measures BUFFER values, not screen values.** Terrain
+  must stay below it; units and effects carry emissive multipliers to sit above.
+- **A constant ported from the PoC or HK is in THAT project's units** until
+  proven otherwise. Both `tower.damage` and `tower.projSpeed` shipped wrong for
+  exactly this reason.
+- **Sweep `playerKillShare` is an upper bound** — the scripted aimer is perfect.
+- **Five levers need companion overrides** because the default offence cannot
+  complete a kill; `wave.hpGrowth` needs the opposite companion to the rest.
+- **Two levers are in SATURATING** (`eco.streakCap`, `wave.winAt`): long-run
+  mechanics that a 50-second harness run cannot reach.
 
 ## Lessons that must not be relearned
 

@@ -250,7 +250,87 @@ it until the feel pass.
 
 ---
 
-## 7. Still missing for PoC parity
+## 7. Chunk 3 — the roster, the economy, and the light
+
+### 7.1 What landed
+
+Eight towers with six structurally different attacks (spread fans pellets, the
+mortar lofts and detonates on arrival with splash, the slow field touches every
+critter in range at once, the laser is hitscan). Twelve enemy types with their
+own speed, HP, bounty, leak cost, colour and size, plus on-hit accel/slow and
+regen. Credits, a kills-only economy with a streak multiplier that any leak
+resets, tower cost/sell/upgrade, range rings, a shop, a build phase, a tower
+unlock ladder, and a win condition.
+
+Both references agreed on the numbers, so the roster is a settled design rather
+than a guess — the PoC's `towers.js`, `economy.js` and `enemyspec.js` are pure
+modules that ported near-verbatim.
+
+### 7.2 The damage-scale bug
+
+The first roster rescaled damage and HP **independently** onto TTD's range,
+which broke the one property that matters: the baseline tower went from killing
+a default critter in ~2 hits to needing 6, towers stopped killing anything, and
+`tower.damage` and `tower.range` both read DEAD in liveness.
+
+What has to be preserved is the **damage-to-HP ratio**. 14 damage against a
+20 HP enemy is two shots; 2.52 against TTD's 5 HP default is the same two
+shots. A test now pins "two shots to kill a default critter", so the scale
+cannot drift again.
+
+**The general lesson, twice learned this milestone:** a constant ported from
+another project is in *that project's* units until proven otherwise.
+`tower.projSpeed` had the same failure — carried over as ~1.1 when critters
+here move up to 2.83 u/s, so a tower fired and the critter simply outran the
+shot.
+
+### 7.3 The board was gamma-crushed, and paint could not fix it
+
+The board read as near-black from M0c-1 onward, and three separate attempts to
+fix it by choosing brighter colours failed. Measuring instead of eyeballing
+settled it: rendering a probe surface at a known value and sampling actual
+pixels showed the input-to-screen curve is compressive and **saturating** —
+0.3 in renders at 30/255, 0.7 at 52, and 0.9 *also* at 52.
+
+Values written into a vertex-colour buffer land on screen at roughly `v^2.2`.
+`screenTone()` pre-applies the inverse so the constants say what you will see.
+Mean board brightness went 34/255 → 41, with the maze relief legible for the
+first time.
+
+Two things broke on the way, both worth recording:
+
+- **`OutputPass` is not the missing piece it looks like.** It was added on the
+  obvious reasoning that a post chain needs one. The white-surface probe showed
+  the opposite: without it white renders white, with it white renders dark grey.
+  The renderer already converts on the final blit. It is now absent with a
+  comment saying why and how to re-test.
+- **The bloom threshold measures BUFFER values, not screen values.** Gamma
+  pre-compensation raises buffer values, so at the old threshold of 0.5 the
+  terrain bloomed and washed the board to fog. Threshold is now 0.88, above the
+  terrain; units and effects carry 2.8x and 3.4x emissive multipliers to sit
+  well above it. The board stays matte and only what matters glows.
+
+### 7.4 Standing findings
+
+- **An aiming tank dominates.** Teaching the scripted patrol to aim revived
+  `playerKillShare` from a pinned 0.00 — and immediately showed the tank taking
+  70–100% of kills before the roster landed, 28–67% after. Vision §0 asks
+  whether the board is wallpaper; with a competent aimer it nearly was.
+- **Sweep `playerKillShare` is an UPPER BOUND.** The scripted aimer is perfect
+  and never panics.
+- **Two levers are in SATURATING for the same reason:** `eco.streakCap` and
+  `wave.winAt` are long-run mechanics measured by a short run. A 50-second
+  harness run reaches wave 3 with a best streak of 4, so caps and win targets
+  above that are equally unreachable. Narrowing their ranges to fit the harness
+  would let the rig's convenience dictate the game's shape.
+- **Five levers need companion overrides** because the default offence cannot
+  complete a kill. `wave.hpGrowth` needs the *opposite* companion to the others
+  — damage low enough that HP still matters — which is what shows this is a
+  defaults problem rather than a test problem.
+
+---
+
+## 8. Still missing for PoC parity
 
 Chunk 2 is done. Not carried over from the PoC: **splash damage and mortar
 arcs**, which belong with the tower types that use them, in chunk 3.
