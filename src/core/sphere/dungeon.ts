@@ -107,7 +107,12 @@ export function generateDungeon(
     roomRadius: number;
     extraCorridors: number;
     corridorWidth: number;
-    obstacles: number;   // accepted for interface compatibility; reserved for future use
+    // NOTE: no `obstacles`. The PoC exposed an obstacles slider that
+    // dungeon.js never read — it only *appeared* to work because changing it
+    // triggered a world rebuild, which changed the map anyway. A parameter
+    // that does nothing is worse than a missing one, especially here: this
+    // project's whole premise is that every lever is live. If wall-clump
+    // density is wanted, it gets added the day it is implemented.
   },
 ): Dungeon {
   const { seed, rooms, roomRadius, extraCorridors, corridorWidth } = opts;
