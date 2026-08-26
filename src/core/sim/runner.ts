@@ -122,7 +122,10 @@ export function runHeadless(spec: RunSpec): RunResult {
   for (let k = 0; k < maxTicks; k++) {
     world.tick(dt, inputMode === 'patrol' ? patrolInput(k, world) : IDLE);
     ticksRun = k + 1;
-    if (stopAtDeath && world.heartDied) {
+    // Stops on a WIN as well as a death. A run that keeps ticking after it was
+    // won accrues telemetry on a finished game — the same post-mortem problem
+    // that made every M0a sweep row partly fiction.
+    if (stopAtDeath && world.over) {
       stoppedEarly = true;
       break;
     }

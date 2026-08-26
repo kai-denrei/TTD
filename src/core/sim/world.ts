@@ -76,6 +76,12 @@ export type World = {
   tank: Tank;
   heartHp: number;
   heartDied: boolean;
+  /** True once the run has been won: winAt waves cleared, heart alive, board
+   *  empty. A run can now END WELL, which difficulty needs in order to mean
+   *  anything — a curve with no top cannot be calibrated. */
+  won: boolean;
+  /** True when the run is over either way; the shell stops ticking on this. */
+  over: boolean;
   macro: boolean;
   tuning: TuningStore;
   telemetry: ReturnType<typeof makeTelemetry>;
@@ -440,6 +446,16 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     // 8e. Wave clear detection (check if wave is now fully clear after deaths)
     // (Wave engine handles this internally via enemiesAlive count)
 
+    // ── 8e2. Win check ───────────────────────────────────────────────────────
+    // Won when the target wave count is cleared AND the board is empty. Both
+    // halves matter: clearing wave N while a dozen critters are still walking
+    // is not a win, it is a lull.
+    if (telemetry.data.wonAt === null && heartHp > 0) {
+      const target = tuning.get('wave.winAt');
+      const boardEmpty = critters.every((c) => !c.alive);
+      if (waves.wave > target && boardEmpty) telemetry.recordWin(elapsed);
+    }
+
     // ── 8f. Passive income (defaults to zero; see eco.trickle) ───────────────
     economy.tick(dt);
 
@@ -540,6 +556,8 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     tank,
     get heartHp() { return heartHp; },
     get heartDied() { return telemetry.data.heartDeathAt !== null; },
+  get won() { return telemetry.data.wonAt !== null; },
+  get over() { return telemetry.data.heartDeathAt !== null || telemetry.data.wonAt !== null; },
     get macro() { return macro; },
     tuning,
     telemetry,

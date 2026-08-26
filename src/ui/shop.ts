@@ -121,8 +121,6 @@ export type Shop = {
   el: HTMLElement;
   /** The tower key the next placement should use. */
   readonly selectedKey: string;
-  /** Called when the player picks a different tower; the ring follows this. */
-  onSelect(fn: (key: string) => void): void;
   sync(): void;
 };
 
@@ -161,7 +159,6 @@ export function makeShop(world: World, root: HTMLElement): Shop {
 
   const first = rows[0];
   let selectedKey = first === undefined ? 'single' : first.spec.key;
-  const listeners: Array<(key: string) => void> = [];
 
   // One delegated listener rather than eight: the rows never change, but a
   // listener per row is eight closures to keep in step with nothing.
@@ -173,7 +170,6 @@ export function makeShop(world: World, root: HTMLElement): Shop {
     if (key === undefined || key === selectedKey) return;
     selectedKey = key;
     paintSelection();
-    for (const fn of listeners) fn(key);
   });
 
   const creditNode = credit.querySelector<HTMLElement>('[data-f="credit"]');
@@ -212,7 +208,6 @@ export function makeShop(world: World, root: HTMLElement): Shop {
   return {
     el,
     get selectedKey() { return selectedKey; },
-    onSelect(fn) { listeners.push(fn); },
     sync,
   };
 }

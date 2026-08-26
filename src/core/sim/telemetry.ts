@@ -35,6 +35,9 @@ export type Telemetry = {
   creditEarned: number;        // lifetime income
   creditSpent: number;         // lifetime outgoings
   streakBest: number;          // longest unbroken kill streak
+  /** Elapsed time the run was won, or null if it was not. A run that is still
+   *  going and a run that was lost are both null — `survived` distinguishes. */
+  wonAt: number | null;
 };
 
 export function makeTelemetry(): {
@@ -48,6 +51,7 @@ export function makeTelemetry(): {
   waveCleared(seconds: number): void;
   recordEconomy(e: { credit: number; earned: number; spent: number; streak: number }): void;
   recordHeartDeath(elapsed: number): void;
+  recordWin(elapsed: number): void;
   resetPhaseCounters(): void;
   summary(): Record<string, number>;
   reset(): void;
@@ -78,6 +82,7 @@ export function makeTelemetry(): {
     creditEarned: 0,
     creditSpent: 0,
     streakBest: 0,
+    wonAt: null,
   };
 
   /** Mirror the economy into telemetry. Called each tick by the World, which
@@ -143,6 +148,10 @@ export function makeTelemetry(): {
   function decision(): void {
     data.decisionsThisPhase += 1;
     data.decisionsTotal += 1;
+  }
+
+  function recordWin(elapsed: number): void {
+    if (data.wonAt === null) data.wonAt = elapsed;
   }
 
   function recordHeartDeath(elapsed: number): void {
@@ -218,6 +227,8 @@ export function makeTelemetry(): {
       creditEarned: data.creditEarned,
       creditSpent: data.creditSpent,
       streakBest: data.streakBest,
+      won: data.wonAt === null ? 0 : 1,
+      wonAt: data.wonAt ?? 0,
     };
   }
 
@@ -245,9 +256,10 @@ export function makeTelemetry(): {
     data.creditEarned = 0;
     data.creditSpent = 0;
     data.streakBest = 0;
+    data.wonAt = null;
   }
 
-  return { data, tick, kill, heartHit, tankHit, leak, decision, waveCleared, recordEconomy, recordHeartDeath, resetPhaseCounters, summary, reset };
+  return { data, tick, kill, heartHit, tankHit, leak, decision, waveCleared, recordEconomy, recordHeartDeath, recordWin, resetPhaseCounters, summary, reset };
 }
 
 // --- private helpers ---

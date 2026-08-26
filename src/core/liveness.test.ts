@@ -105,6 +105,17 @@ const SATURATING = new Set<string>([
   // wrong trade. This is a long-run mechanic being measured by a short run.
   // Re-verify if the harness ever runs long enough to sustain a real streak.
   'eco.streakCap',
+  // wave.winAt — live at min vs max (winAt 1 wins the run almost immediately,
+  // which changes everything downstream), but its upper half is unreachable
+  // here. Measured: a 50-second harness run reaches WAVE 3 before the heart
+  // dies, so a win target of 15 and one of 30 are equally never met and the
+  // telemetry is identical.
+  //
+  // This is the same shape as eco.streakCap: a long-run mechanic measured by a
+  // short run. Shortening the lever's range to fit the harness would make the
+  // rig's convenience dictate the game's length, which is exactly backwards.
+  // Re-verify if the harness is ever given a budget long enough to win.
+  'wave.winAt',
 ]);
 
 function runWith(overrides: Record<string, number>, seed = 42, ticks = 3000): Record<string, number> {

@@ -73,6 +73,14 @@ export const LEVERS: readonly Lever[] = [
     help: 'Per-wave multiplier on enemy max HP. 1.0 = no scaling; 1.3 = enemies have 30% more HP each wave.',
   },
 
+  {
+    key: 'wave.winAt',
+    group: 'intensity',
+    label: 'Waves to win',
+    min: 1, max: 30, step: 1, value: 12,
+    help: 'Clear this many waves with the heart alive and the board empty, and the run is WON. Twelve is the reference length. Until M0c-3 a run could only ever be lost, which meant difficulty had no success state to calibrate against — a curve with no top.',
+  },
+
   // ── critters ───────────────────────────────────────────────────────────────
   {
     key: 'enemy.speed',
