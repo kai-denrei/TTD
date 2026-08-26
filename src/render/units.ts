@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { turretPts } from '../core/models/turret.ts';
 import { minePts } from '../core/models/mine.ts';
-import { CREATURE_MODELS } from '../core/models/creatures.ts';
+import { CREATURE_MODELS, FLAT_MODELS } from '../core/models/creatures.ts';
 import { makePointCloud, basisAt } from './points.ts';
 import { WALL_HEIGHT } from './geometry.ts';
 import { HEART_MAX_HP } from '../core/sim/world.ts';
@@ -94,7 +94,17 @@ export function makeUnits(): Units {
       // judge threat by silhouette, not chrome.
       const hpFrac = c.hpMax > 0 ? Math.max(0, c.hp) / c.hpMax : 1;
       const cloud = species.get(c.type) ?? critters;
-      cloud.add(lift(c.pos, scale), scale, basisAt(n, heading), 0.45 + 0.55 * hpFrac, col);
+      // Flat models lie TANGENT to the surface rather than standing on it. The
+      // default frame puts model +Y along the normal, which stands a z=0 model
+      // upright — and an upright flat thing disappears edge-on, which on an
+      // orbiting sphere camera happens constantly. Swapping so the model's zero
+      // axis takes the normal lays it on the ground: fully readable from above,
+      // merely foreshortened from the chase camera.
+      const b = basisAt(n, heading);
+      const frame = FLAT_MODELS.has(c.type)
+        ? { fwd: b.fwd, up: b.side, side: b.up }
+        : b;
+      cloud.add(lift(c.pos, scale), scale, frame, 0.45 + 0.55 * hpFrac, col);
     }
     critters.end();
     for (const c of species.values()) c.end();

@@ -490,6 +490,17 @@ export function neuronPts(): ModelPoint[] {
  *      alone on the announce card and never confusable with a sibling; a mine
  *      at 0.80 size reads as "the big one" adequately until the knot lands.
  *  Adding a model later means adding one line here — nothing else changes. */
+/** Species whose model is drawn FLAT in XY (z = 0) in the donor.
+ *
+ *  A flat model oriented like a solid one stands perpendicular to the ground and
+ *  vanishes when viewed edge-on — which on a sphere happens constantly, since
+ *  the camera orbits. The renderer lays these tangent to the surface instead, so
+ *  they read fully from the build cameras looking down and merely foreshorten
+ *  from the chase camera. Making them solids of revolution was the alternative
+ *  and it turns a bat into a blob, which is the exact problem this port exists
+ *  to fix. */
+export const FLAT_MODELS: ReadonlySet<string> = new Set(['ghost', 'barbed']);
+
 export const CREATURE_MODELS: ReadonlyMap<string, () => ModelPoint[]> = new Map([
   ['phage', phagePts],
   ['ghost', batPts],
