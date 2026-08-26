@@ -102,11 +102,13 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   // Algorithm: mean chord length across all adjacent cell pairs in the mesh
   //   (captures the actual local cell spacing, not an approximation).
   // Fraction: 0.4 × mean chord.
-  //   - 600-point mesh → mean chord ≈ 0.068 → radius ≈ 0.027.
+  //   - MESH_POINTS=600 yields ~2660–2700 output quads (varies by seed); mean chord ≈ 0.068 → radius ≈ 0.027.
   //   - Measured minimum gate-to-spawn across seeds 1–60 is 0.047 (seed 57),
   //     so 0.027 keeps spawned critters outside the contact zone.
   //   - A critter must travel ~0.4 of a cell before it can trigger a ram hit,
-  //     which prevents spawn-adjacent auto-kills regardless of seed.
+  //     which prevents spawn-adjacent auto-kills for a stationary tank. A fast
+  //     moving tank (tank.speed=10) displaces ~0.167/tick and sweeps a larger
+  //     disc via the step-7d floor — that is intentional (the point of swept radius).
   //   - In step 7d the floor is extended by half the actual displacement moved
   //     this tick (measured from tankPrev), so a moving tank does not tunnel
   //     through critters. A parked tank (forward=0) gets no extension.

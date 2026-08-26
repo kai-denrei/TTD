@@ -9,17 +9,18 @@ test('counters are exact over a scripted run', () => {
   const t = makeTelemetry();
   // heartHit = damage applied; leak = critter reached heart (these are now distinct)
   t.heartHit(); t.heartHit(); t.tankHit(); t.leak();
-  // kill(by, lifespan, ttk): lifespan = age at death, ttk = first-hit-to-death (null if no prior hit)
-  t.kill('tower', 2, 1.5); t.kill('player', 4, null); t.kill('player', 6, 2.0);
+  // kill(by, lifespan, ttk): lifespan = age at death, ttk = first-hit-to-death
+  // (0 for one-shots — firstHitAt is stamped before damage, so elapsed - firstHitAt = 0 on kill).
+  t.kill('tower', 2, 1.5); t.kill('player', 4, 0); t.kill('player', 6, 2.0);
   assert.equal(t.data.heartHits, 2);
   assert.equal(t.data.tankHits, 1);
   assert.equal(t.data.leaks, 1);
   assert.equal(t.data.kills, 3);
   assert.equal(t.data.killsByTower, 1);
   assert.equal(t.data.killsByPlayer, 2);
-  // lifespan array has all 3 kills; ttk array excludes the null-ttk kill
+  // lifespan and ttk arrays both have all 3 kills (ttk is always a plain number now)
   assert.equal(t.data.lifespan.length, 3);
-  assert.equal(t.data.ttk.length, 2);
+  assert.equal(t.data.ttk.length, 3);
 });
 
 test('macro/tactical time splits by mode', () => {
@@ -55,7 +56,7 @@ test('summary derives the balance ratios', () => {
   const t = makeTelemetry();
   for (let i = 0; i < 10; i++) t.tick(0.1, { macro: true, enemiesAlive: 0, tankActing: false });
   for (let i = 0; i < 10; i++) t.tick(0.1, { macro: false, enemiesAlive: 0, tankActing: false });
-  t.kill('tower', 1, 0.5); t.kill('player', 1, null); t.kill('player', 1, 0.3);
+  t.kill('tower', 1, 0.5); t.kill('player', 1, 0); t.kill('player', 1, 0.3);
   const s = t.summary();
   assert.ok(Math.abs(s['macroShare']! - 0.5) < 1e-6);
   assert.ok(Math.abs(s['playerKillShare']! - 2 / 3) < 1e-6);

@@ -16,7 +16,7 @@ export type Telemetry = {
   kills: number;
   killsByTower: number;
   killsByPlayer: number;
-  ttk: number[];             // seconds from first hit to death (true TTK); 0 for one-shot kills (firstHitAt stamped before damage)
+  ttk: number[];             // seconds from first hit to death (true TTK); 0 for one-shot kills (firstHitAt stamped before damage); always a plain number (null-safe at call sites)
   lifespan: number[];        // seconds from spawn to death (total age)
   waveClearTimes: number[];  // seconds each wave took to clear
   peakConcurrent: number;    // high-water mark of simultaneous live enemies
@@ -34,7 +34,7 @@ export type Telemetry = {
 export function makeTelemetry(): {
   data: Telemetry;
   tick(dt: number, ctx: { macro: boolean; enemiesAlive: number; tankActing: boolean }): void;
-  kill(by: 'tower' | 'player', lifespan: number, ttk: number | null): void;
+  kill(by: 'tower' | 'player', lifespan: number, ttk: number): void;
   heartHit(): void;
   tankHit(): void;
   leak(): void;
@@ -96,10 +96,10 @@ export function makeTelemetry(): {
     }
   }
 
-  function kill(by: 'tower' | 'player', lifespan: number, ttk: number | null): void {
+  function kill(by: 'tower' | 'player', lifespan: number, ttk: number): void {
     data.kills += 1;
     data.lifespan.push(lifespan);
-    if (ttk !== null) data.ttk.push(ttk);
+    data.ttk.push(ttk);
     if (by === 'tower') {
       data.killsByTower += 1;
     } else {
