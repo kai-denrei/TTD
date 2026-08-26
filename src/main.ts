@@ -15,6 +15,8 @@ import { makeEffects } from './render/effects.ts';
 import { makeRings } from './render/rings.ts';
 import { makeShop, cellSize, rangeWorld } from './ui/shop.ts';
 import { makeTowerPanel } from './ui/towerpanel.ts';
+import { makeAnnounce } from './ui/announce.ts';
+import { makeSound } from './audio/sound.ts';
 import { TOWER_BY_KEY } from './core/sim/towerspec.ts';
 import { isFrontierWall } from './core/sphere/dungeon.ts';
 import { makeRenderTarget, readRenderState } from './render/bindings.ts';
@@ -128,6 +130,23 @@ const loop = makeLoop({
 
 const hud = makeHud(app);
 const shop = makeShop(world, app);
+const announce = makeAnnounce(world, app);
+
+const sound = makeSound();
+// Web Audio stays blocked until a user gesture, so arm one-shot listeners on
+// every plausible first interaction — whichever lands first wins, and resume()
+// is idempotent so the stragglers cost nothing. Capture phase on purpose: input
+// handling does not stop propagation today, but this keeps working if it ever
+// does.
+for (const evt of ['pointerdown', 'keydown', 'touchstart'] as const) {
+  window.addEventListener(evt, () => { void sound.resume(); }, { once: true, passive: true, capture: true });
+}
+let muted = false;
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyM' || e.repeat) return;
+  muted = !muted;
+  sound.setMuted(muted);
+});
 /** World units per cell — the unit tower ranges are authored in. */
 const CELL = cellSize(world);
 
@@ -204,6 +223,7 @@ function frame(now: number): void {
   // Drained ONCE — the buffer empties on read, so feel and effects share the
   // array rather than racing for it.
   const events = world.drainEvents();
+  sound.play(events);
   const heartFrac = world.heartHp / HEART_MAX_HP;
   danger = dangerLevel(heartFrac, danger);
 
@@ -226,6 +246,9 @@ function frame(now: number): void {
   const renderSeconds = frameSeconds * hitstop.update(frameSeconds);
 
   units.sync(world);
+  // Real frame time, not hitstop-scaled: a countdown that slows down every time
+  // something explodes is a countdown you cannot trust.
+  announce.sync(frameSeconds);
   effects.sync(events, world.projectiles, renderSeconds, renderTarget.fx);
   hud.sync(world);
   shop.sync();
