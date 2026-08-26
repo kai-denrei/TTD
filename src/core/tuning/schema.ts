@@ -147,6 +147,13 @@ export const LEVERS: readonly Lever[] = [
     help: 'Seconds between tower shots. Lower = faster fire rate.',
   },
   {
+    key: 'tower.projSpeed',
+    group: 'player',
+    label: 'Shot speed',
+    min: 1, max: 12, step: 0.5, value: 6,
+    help: 'How fast a tower shot travels, in sphere units per second. Calibrate against critters, which move 0.67 u/s at enemy.speed 1 and 2.83 u/s at 3.0 (measured) — a shot slower than its target can never catch it. Default 6 comfortably outruns the fastest critter; at 1 you watch shots cross a corridor and fast critters outrun them; at 12 it is near-hitscan. The max is 12 rather than the ~16 where the lever measurably saturates: a lever sitting at the edge of its observable region goes dead on any unrelated RNG shift, which is exactly how tower.rate died. Vision §6.4 names per-tower projectile speed as what stops towers feeling samey.',
+  },
+  {
     key: 'tank.speed',
     group: 'player',
     label: 'Tank speed',

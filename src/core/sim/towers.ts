@@ -3,8 +3,10 @@
 // Design:
 //   - All levers read LIVE inside tick — never captured at construction.
 //   - No Math.random — towers are deterministic (nearest-target, tie-break by id).
-//   - Returns a DamageEvent per shot rather than mutating critters directly;
-//     the World resolves damage in a single pass after all systems have ticked.
+//   - Returns a SHOT REQUEST per firing, not damage. Since M0c-2 towers do not
+//     deal damage at all: they spawn a projectile that travels, can be watched,
+//     and can miss. The World turns these into projectiles; projectiles.ts
+//     resolves the damage on impact.
 
 import type { Vec3 } from '../sphere/vec3.ts';
 import { dist } from '../sphere/vec3.ts';
@@ -21,10 +23,15 @@ export type Tower = {
   kills: number;
 };
 
-export type TowerDamageEvent = {
+/** A tower asking for a shot. Carries the aim direction so the renderer can
+ *  place a muzzle flash along the barrel, and the target id so the projectile
+ *  can home. */
+export type TowerShotRequest = {
   towerId: number;
   critterId: number;
   damage: number;
+  from: Vec3;
+  dir: Vec3;
 };
 
 // ---- Tower factory ----------------------------------------------------------
@@ -36,19 +43,20 @@ export function makeTower(id: number, cell: number, pos: Vec3): Tower {
 // ---- Tower step (returns pending damage events) -----------------------------
 
 /**
- * Advance all towers by dt, returning damage events to be resolved by the World.
- * Towers pick the nearest alive critter within tower.range; ties broken by lowest id.
+ * Advance all towers by dt, returning SHOT REQUESTS for the World to turn into
+ * projectiles. Towers pick the nearest alive critter within tower.range; ties
+ * broken by lowest id.
  */
 export function stepTowers(
   towers: Tower[],
   critters: Critter[],
   dt: number,
   tuning: TuningStore,
-): TowerDamageEvent[] {
+): TowerShotRequest[] {
   const damage = tuning.get('tower.damage');
   const range = tuning.get('tower.range');
   const rate = tuning.get('tower.rate');
-  const events: TowerDamageEvent[] = [];
+  const events: TowerShotRequest[] = [];
 
   for (const tower of towers) {
     // Cool down
@@ -71,7 +79,16 @@ export function stepTowers(
     }
 
     if (target !== null) {
-      events.push({ towerId: tower.id, critterId: target.id, damage });
+      const dx = target.pos[0] - tower.pos[0];
+      const dy = target.pos[1] - tower.pos[1];
+      const dz = target.pos[2] - tower.pos[2];
+      events.push({
+        towerId: tower.id,
+        critterId: target.id,
+        damage,
+        from: tower.pos,
+        dir: [dx, dy, dz],
+      });
       // Rate is seconds-per-shot; reset cooldown
       tower.cooldown = rate;
     }

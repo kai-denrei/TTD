@@ -4,14 +4,23 @@
 // Changing this order invalidates the comparability of saved presets.
 // Presets are tuning snapshots, and replays must match exactly:
 //
+//   0. clear last tick's events (never on drain — a headless run never drains)
 //   1. dt *= time.scale
 //   2. waves.tick  → fires onSpawn callbacks → push to pendingSpawns
 //   3. spawn        → move pendingSpawns into critters[]
 //   4. critters     → step each alive critter; collect 'arrived' (heart leaks)
-//   5. towers       → collect TowerDamageEvents
-//   6. tank         → collect TankDamageEvents; update tankActing
-//   7. resolve damage → apply all damage events; count kills, heart hits, tank hits
-//   8. telemetry    → tick with current state
+//   5. towers       → collect TowerShotRequests → SPAWN projectiles (no damage)
+//   6. tank         → collect TankDamageEvents (hitscan); update tankActing
+//   7. projectiles  → move, home, collide → ProjectileHits
+//   8. resolve damage → apply all damage; count kills, heart hits, tank hits
+//   9. telemetry    → tick with current state
+//  10. prune dead critters and spent projectiles
+//
+// M0c-2 inserted phase 7 and made towers spawn rather than damage. Projectiles
+// step AFTER the tank so a shot fired this tick cannot also resolve this tick:
+// it must be visible in flight for at least one frame, or the travel time it
+// exists to express is invisible. Per the rule above, this reordering
+// invalidates the comparability of presets saved before M0c-2.
 //
 // NAMED RNG STREAMS — never share a stream across systems.
 // Adding a draw in one stream must never reshuffle another system's draws.
@@ -41,6 +50,8 @@ import type { WaveEngine } from './waves.ts';
 import { makeWaveEngine } from './waves.ts';
 import type { Tower } from './towers.ts';
 import { makeTower, stepTowers } from './towers.ts';
+import type { Projectile } from './projectiles.ts';
+import { makeProjectile, stepProjectiles } from './projectiles.ts';
 import type { Tank, TankInput } from './tank.ts';
 import { makeTank, stepTank } from './tank.ts';
 import type { Vec3 } from '../sphere/vec3.ts';
@@ -54,6 +65,8 @@ export type World = {
   dungeon: Dungeon;
   critters: Critter[];
   towers: Tower[];
+  /** Shots currently in flight. The renderer draws tracers from these. */
+  projectiles: Projectile[];
   tank: Tank;
   heartHp: number;
   heartDied: boolean;
@@ -171,6 +184,10 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   const towers: Tower[] = [];
   let nextTowerId = 0;
 
+  // ── Projectiles ───────────────────────────────────────────────────────────
+  const projectiles: Projectile[] = [];
+  let nextProjectileId = 0;
+
   const spawnPos: Vec3 = mesh.centers[dungeon.spawn] ?? [0, 1, 0];
   const tank: Tank = makeTank(spawnPos, dungeon.spawn);
 
@@ -240,17 +257,38 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       }
     }
 
-    // ── 5. Towers tick → collect damage events ───────────────────────────────
-    const towerEvents = stepTowers(towers, critters, dt, tuning);
+    // ── 5. Towers tick → spawn projectiles (they no longer deal damage) ──────
+    const shotRequests = stepTowers(towers, critters, dt, tuning);
+    for (const req of shotRequests) {
+      const p = makeProjectile(nextProjectileId++, {
+        pos: req.from,
+        dir: req.dir,
+        speed: tuning.get('tower.projSpeed'),
+        damage: req.damage,
+        // A shot may chase slightly beyond the tower's range; without the
+        // margin a target at the edge of range is unhittable by construction.
+        range: tuning.get('tower.range') * 1.35,
+        source: 'tower',
+        homingId: req.critterId,
+      });
+      projectiles.push(p);
+      events.emit({ kind: 'shotFired', at: p.pos, dir: p.dir, source: 'tower' });
+    }
 
     // ── 6. Tank tick → collect damage events ─────────────────────────────────
     // Capture position before stepTank so we can measure actual displacement below.
     const tankPrev: [number, number, number] = [tank.pos[0]!, tank.pos[1]!, tank.pos[2]!];
     const { events: tankEvents, acting: tankActing } = stepTank(tank, dt, input, critters, tuning);
 
-    // ── 7. Resolve damage ────────────────────────────────────────────────────
+    // ── 7. Projectiles: move, home, collide ──────────────────────────────────
+    const { hits: projectileHits, expired } = stepProjectiles(projectiles, critters, dt, tuning);
+    for (const h of projectileHits) {
+      events.emit({ kind: 'impact', at: h.at, damage: h.damage, source: h.source });
+    }
 
-    // 7a. Critters that reached heart
+    // ── 8. Resolve damage ────────────────────────────────────────────────────
+
+    // 8a. Critters that reached heart
     for (const id of arrivedIds) {
       const c = critters.find((x) => x.id === id);
       if (c === undefined || !c.alive) continue;
@@ -270,20 +308,19 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       }
     }
 
-    // 7b. Tower damage events
-    for (const evt of towerEvents) {
-      const c = critters.find((x) => x.id === evt.critterId);
+    // 8b. Projectile hits (tower fire arrives here, one or more ticks late)
+    for (const h of projectileHits) {
+      const c = critters.find((x) => x.id === h.critterId);
       if (c === undefined) continue;
-      const killed = hitCritter(c, evt.damage, tuning, elapsed);
+      const killed = hitCritter(c, h.damage, tuning, elapsed);
       if (killed) {
-        const tower = towers.find((t) => t.id === evt.towerId);
-        if (tower !== undefined) tower.kills += 1;
         const ttk = elapsed - (c.firstHitAt ?? elapsed);
         telemetry.kill('tower', elapsed - c.bornAt, ttk);
+        events.emit({ kind: 'critterDied', at: c.pos, by: 'tower' });
       }
     }
 
-    // 7c. Tank damage events
+    // 8c. Tank damage events
     for (const evt of tankEvents) {
       const c = critters.find((x) => x.id === evt.critterId);
       if (c === undefined) continue;
@@ -291,10 +328,11 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       if (killed) {
         const ttk = elapsed - (c.firstHitAt ?? elapsed);
         telemetry.kill('player', elapsed - c.bornAt, ttk);
+        events.emit({ kind: 'critterDied', at: c.pos, by: 'tank' });
       }
     }
 
-    // 7d. Contact damage to tank (critters that reach the tank's position)
+    // 8d. Contact damage to tank (critters that reach the tank's position)
     // Swept-motion floor: the point test below samples once per tick. Without the
     // floor a fast tank tunnels through critters — the step can exceed the static
     // radius entirely and 100% of contacts are missed. We use the actual displacement
@@ -327,10 +365,10 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       }
     }
 
-    // 7e. Wave clear detection (check if wave is now fully clear after deaths)
+    // 8e. Wave clear detection (check if wave is now fully clear after deaths)
     // (Wave engine handles this internally via enemiesAlive count)
 
-    // ── 8. Telemetry tick ────────────────────────────────────────────────────
+    // ── 9. Telemetry tick ────────────────────────────────────────────────────
     const enemiesAlive = critters.filter((c) => c.alive).length;
     telemetry.tick(dt, {
       macro,
@@ -338,7 +376,14 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       tankActing,
     });
 
-    // ── 9. Prune dead critters ────────────────────────────────────────────────
+    // ── 10. Prune dead critters and spent projectiles ─────────────────────────
+    if (expired.length > 0) {
+      const gone = new Set(expired);
+      const live = projectiles.filter((p) => !gone.has(p.id));
+      projectiles.length = 0;
+      for (const p of live) projectiles.push(p);
+    }
+
     // Done last so all step 7 `find` calls still have their targets.
     // filter() preserves order → determinism holds.
     // After pruning, critters[] contains only live critters.
@@ -393,6 +438,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     dungeon,
     critters,
     towers,
+    projectiles,
     tank,
     get heartHp() { return heartHp; },
     get heartDied() { return telemetry.data.heartDeathAt !== null; },
