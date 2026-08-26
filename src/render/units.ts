@@ -28,10 +28,22 @@ export function makeUnits(): Units {
   const mine = minePts();
   const turret = turretPts();
 
-  const critters = makePointCloud(mine, CRITTER_CAP, { size: 0.006, color: 0xff5a3c, highlight: 0xffd08a });
-  const towers = makePointCloud(turret, TOWER_CAP, { size: 0.006, color: 0x64b5ff, highlight: 0xd8f0ff });
-  const tank = makePointCloud(turret, 1, { size: 0.007, color: 0x7ee0a8, highlight: 0xe8fff2 });
-  const heart = makePointCloud(mine, 1, { size: 0.012, color: 0xff3060, highlight: 0xffc0d0 });
+  // sizeFactor ~0.07 of the model radius keeps points just under the mean
+  // spacing of a ~500-point cloud: dense enough to read as a solid silhouette,
+  // sparse enough that additive stacking does not clip to white up close.
+  const DOT = 0.07;
+  const critters = makePointCloud(mine, CRITTER_CAP, {
+    scale: CRITTER_SCALE, sizeFactor: DOT, color: 0xff5a3c, highlight: 0xffd08a,
+  });
+  const towers = makePointCloud(turret, TOWER_CAP, {
+    scale: TOWER_SCALE, sizeFactor: DOT, color: 0x64b5ff, highlight: 0xd8f0ff,
+  });
+  const tank = makePointCloud(turret, 1, {
+    scale: TANK_SCALE, sizeFactor: DOT, color: 0x7ee0a8, highlight: 0xe8fff2,
+  });
+  const heart = makePointCloud(mine, 1, {
+    scale: HEART_SCALE, sizeFactor: DOT, color: 0xff3060, highlight: 0xffc0d0,
+  });
 
   const group = new THREE.Group();
   group.name = 'units';

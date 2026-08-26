@@ -1,0 +1,170 @@
+// modes.ts — the camera roster, declared the way LEVERS declares levers.
+//
+// WHY A REGISTRY. The operator asked for a camera *system*: bird's-eye and
+// cinematic angles for building, third-person and POV for the tank. Declaring
+// modes as data means adding a top-down-over-tank or a scripted beat camera
+// later is ONE entry, not a refactor. Vision §6.6 already lists beatCameras,
+// modeTransition and intensityFraming as camera levers; this is the structure
+// they hang off.
+//
+// PURE ON PURPOSE. Nothing here imports three.js. A mode is a function from
+// context to {pos, look, up}, so every mode is Node-testable — including the
+// pole degeneracy that would otherwise only show up as a camera spinning on
+// screen at 3am.
+//
+// CONVENTION. The board is a unit sphere, so a surface point is its own
+// normal. Distances below are in sphere radii.
+
+import type { Vec3 } from '../../core/sphere/vec3.ts';
+
+export type CamFamily = 'build' | 'tank';
+
+export type CamContext = {
+  /** The point of interest on the surface — the tank, or the build cursor. */
+  anchor: Vec3;
+  /** Unit surface normal at the anchor. */
+  normal: Vec3;
+  /** Tank heading (build modes use it only as a tangent reference). */
+  heading: Vec3;
+  /** Elapsed seconds — drives driftorbit. */
+  t: number;
+  /** User zoom multiplier. */
+  zoom: number;
+  /** User orbit, radians. Build modes only. */
+  orbitYaw: number;
+  orbitPitch: number;
+};
+
+export type CamFrame = { pos: Vec3; look: Vec3; up: Vec3 };
+
+export type CameraMode = {
+  id: string;
+  family: CamFamily;
+  label: string;
+  frame(ctx: CamContext): CamFrame;
+};
+
+function norm(v: Vec3): Vec3 {
+  const l = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / l, v[1] / l, v[2] / l];
+}
+
+function cross(a: Vec3, b: Vec3): Vec3 {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+
+/** A tangent at `n`, stable everywhere including the poles. Preferring `hint`
+ *  keeps the view oriented with the tank; the fallback engages only when hint
+ *  is parallel to n — exactly the degenerate case that spins a camera. */
+function tangent(n: Vec3, hint: Vec3): Vec3 {
+  const d = hint[0] * n[0] + hint[1] * n[1] + hint[2] * n[2];
+  const t: Vec3 = [hint[0] - n[0] * d, hint[1] - n[1] * d, hint[2] - n[2] * d];
+  if (Math.hypot(t[0], t[1], t[2]) > 1e-6) return norm(t);
+  const ref: Vec3 = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  return norm(cross(ref, n));
+}
+
+function at(n: Vec3, h: number): Vec3 {
+  return [n[0] * h, n[1] * h, n[2] * h];
+}
+
+export const CAMERA_MODES: readonly CameraMode[] = [
+  {
+    id: 'birdseye',
+    family: 'build',
+    label: "Bird's eye",
+    frame(ctx) {
+      const n = norm(ctx.normal);
+      // up must be a TANGENT here, not the normal: looking straight down the
+      // normal makes normal-as-up parallel to the view direction.
+      const up = tangent(n, ctx.heading);
+      return { pos: at(n, 1 + 1.15 * ctx.zoom), look: ctx.anchor, up };
+    },
+  },
+  {
+    id: 'raked',
+    family: 'build',
+    label: 'Raked',
+    frame(ctx) {
+      const n = norm(ctx.normal);
+      const fwd = tangent(n, ctx.heading);
+      const side = cross(n, fwd);
+      const c = Math.cos(ctx.orbitYaw);
+      const s = Math.sin(ctx.orbitYaw);
+      const lat: Vec3 = [fwd[0] * c + side[0] * s, fwd[1] * c + side[1] * s, fwd[2] * c + side[2] * s];
+      const h = 1 + 0.9 * ctx.zoom;
+      const k = 0.85 * ctx.zoom;
+      return {
+        pos: [n[0] * h + lat[0] * k, n[1] * h + lat[1] * k, n[2] * h + lat[2] * k],
+        look: ctx.anchor,
+        up: n,
+      };
+    },
+  },
+  {
+    id: 'driftorbit',
+    family: 'build',
+    label: 'Drift orbit',
+    frame(ctx) {
+      const n = norm(ctx.normal);
+      const fwd = tangent(n, ctx.heading);
+      const side = cross(n, fwd);
+      // Slow automatic orbit: the showcase angle. 0.08 rad/s is one revolution
+      // every ~78 s — movement you notice without having to track it.
+      const a = ctx.t * 0.08;
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      const lat: Vec3 = [fwd[0] * c + side[0] * s, fwd[1] * c + side[1] * s, fwd[2] * c + side[2] * s];
+      const h = 1 + 0.55 * ctx.zoom;
+      const k = 1.15 * ctx.zoom;
+      return {
+        pos: [n[0] * h + lat[0] * k, n[1] * h + lat[1] * k, n[2] * h + lat[2] * k],
+        look: ctx.anchor,
+        up: n,
+      };
+    },
+  },
+  {
+    id: 'chase',
+    family: 'tank',
+    label: 'Chase',
+    frame(ctx) {
+      const n = norm(ctx.normal);
+      const fwd = tangent(n, ctx.heading);
+      const back = 0.16 * ctx.zoom;
+      const rise = 0.075 * ctx.zoom;
+      return {
+        pos: [
+          ctx.anchor[0] - fwd[0] * back + n[0] * rise,
+          ctx.anchor[1] - fwd[1] * back + n[1] * rise,
+          ctx.anchor[2] - fwd[2] * back + n[2] * rise,
+        ],
+        look: [
+          ctx.anchor[0] + fwd[0] * 0.1,
+          ctx.anchor[1] + fwd[1] * 0.1,
+          ctx.anchor[2] + fwd[2] * 0.1,
+        ],
+        up: n,
+      };
+    },
+  },
+  {
+    id: 'pov',
+    family: 'tank',
+    label: 'POV',
+    frame(ctx) {
+      const n = norm(ctx.normal);
+      const fwd = tangent(n, ctx.heading);
+      const pos: Vec3 = [
+        ctx.anchor[0] + n[0] * 0.014,
+        ctx.anchor[1] + n[1] * 0.014,
+        ctx.anchor[2] + n[2] * 0.014,
+      ];
+      return {
+        pos,
+        look: [pos[0] + fwd[0] * 0.2, pos[1] + fwd[1] * 0.2, pos[2] + fwd[2] * 0.2],
+        up: n,
+      };
+    },
+  },
+];

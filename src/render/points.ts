@@ -11,6 +11,15 @@
 // the bloom threshold and makes them glow — the library's "look here" channel
 // survives. Per-point size would need a custom shader; a later refinement,
 // deliberately not done here.
+//
+// SIZE IS DERIVED FROM MODEL SCALE, NOT AUTHORED PER CLOUD. Point size is in
+// world units under sizeAttenuation, so a hand-picked constant that looks
+// right from orbit becomes a saturated white blob from the chase camera 0.16
+// radii away — 500+ additive points overlapping until everything clips to
+// white, and the dot-cloud identity disappears exactly where it should read
+// best. sizeFactor is a fraction of the model's own radius, so a model looks
+// like itself at every distance. Opacity below 1 keeps additive stacking from
+// clipping where the cloud is densest.
 
 import * as THREE from 'three';
 import type { ModelPoint } from '../core/models/helpers.ts';
@@ -58,7 +67,7 @@ export type PointCloud = {
 export function makePointCloud(
   model: readonly ModelPoint[],
   capacity: number,
-  opts: { size: number; color: number; highlight: number },
+  opts: { scale: number; sizeFactor: number; color: number; highlight: number; opacity?: number },
 ): PointCloud {
   const per = model.length;
   const total = per * capacity;
@@ -76,10 +85,11 @@ export function makePointCloud(
   const object = new THREE.Points(
     geo,
     new THREE.PointsMaterial({
-      size: opts.size,
+      size: opts.scale * opts.sizeFactor,
       sizeAttenuation: true,
       vertexColors: true,
       transparent: true,
+      opacity: opts.opacity ?? 0.62,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     }),
