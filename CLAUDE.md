@@ -114,6 +114,13 @@ backtick, or a five-tap top-left corner. `src/ui/admin/` is a leaf.
 
 Known state when tuning — full detail in `docs/05-M0c-notes.md`:
 
+- **`npm run calibrate` is the tool that answers "is this winnable".** It
+  simulates competent play across five seeds. The sweep only says whether a
+  lever moved the needle; this says whether the game is a game. It found the
+  bug that made TTD unplayable for four milestones.
+- **`enemy.speed` is CELLS per second.** It was world units until M0c-3, which
+  meant ~15 cells/s — towers landed 1.7% of their shots and contributed zero
+  kills. Cells are the unit every other spatial value is authored in.
 - **`survivedFor` is the difficulty signal**; `heartHits` saturates at heart HP.
 - **Terrain colours are gamma pre-compensated** (`screenTone` in
   render/geometry.ts). Values land on screen at ~v^2.2 without it, which is why

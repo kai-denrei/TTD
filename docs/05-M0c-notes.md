@@ -330,7 +330,84 @@ Two things broke on the way, both worth recording:
 
 ---
 
-## 8. Still missing for PoC parity
+## 8. Calibration — the bug that made the game unplayable
+
+### 8.1 The tool
+
+`scripts/calibrate.ts` simulates **competent play**: buy the best affordable
+tower on high ground overlooking the route, upgrade when you cannot buy, drive
+at whatever is nearest. It reports outcome, wave reached, towers built, leaks,
+heart remaining and income across five seeds.
+
+The sweep answers *"did this lever move the needle"*. This answers the question
+the sweep structurally cannot: **is the game winnable, and by how much.**
+
+### 8.2 What it found immediately
+
+**0/5 seeds won.** Every run dead by wave 3, with `playerKillShare` **1.00** —
+the towers contributed *zero* kills. Instrumenting the tower event feed:
+
+```
+tower shots fired: 60   impacts: 1   tower kills: 0     hit rate 1.7%
+```
+
+**`enemy.speed` was in world units per second, not CELLS per second.** A cell is
+~0.068 world units, so speed 1.0 meant ~15 cells/second — a critter crossed a
+tower's entire 3.7-cell range in a quarter of a second. Shots travel 20 cells/s,
+so a dumb-fire round aimed where a critter *is* arrives where it *was*. The PoC
+runs critters at ~1 cell/s against the same 20; TTD had that ratio at 2:1.
+
+Cells are the unit every other spatial value here is already authored in — tower
+range, projectile speed, splash radius. Speed was the one value in a different
+scale.
+
+**This is the third constant this milestone that shipped wrong for the same
+reason**, after `tower.damage` and `tower.projSpeed`: *a constant ported from
+another project is in that project's units until proven otherwise.*
+
+### 8.3 After the fix
+
+5/5 seeds won, ~28 towers built, `playerKillShare` 0.09–0.20. Towers carry the
+defence and the tank contributes meaningfully — the layer balance vision §0 asks
+for, arrived at by measurement rather than assertion.
+
+### 8.4 Two defaults calibrated rather than guessed
+
+At the corrected speed the game became trivial the other way — 100 towers and
+13,000 credit, at which point placement is not a decision.
+
+| lever | measured | chosen |
+|---|---|---|
+| bounty | old scale bought ~100 towers / 13,000 credit | ×1.0 → ~28 towers, ~1,800 credit |
+| `wave.hpGrowth` | 1.05 wins losing **zero** heart; 1.20 stalls runs out around wave 11 | **1.15** — wins but costs ~6 heart |
+
+### 8.5 Five stale guards surfaced
+
+Three placed towers on `dungeon.heart` — open floor, refused since M0c-1 — and
+kept passing only because the tank did all the killing. Two more assumed *"the
+heart always dies on the defaults"*, which stopped being true for the best
+possible reason.
+
+The pinned ones were **re-measured, not loosened**. The contact-latch guard's
+separation turned out to be *wider* than before: 2.0× with the latch against
+10.0× without, verified by sabotage.
+
+### 8.6 One mechanic still blocked, and it is the same one twice
+
+`tank.fireArc` is unobservable — arc 10° and arc 180° give byte-identical
+telemetry — because the scripted patrol aims **and** every critter arrives from
+one gate. A fire arc means nothing when threats cannot come from more than one
+direction.
+
+That is the same missing mechanic that killed the multi-front lever. Both wait
+on real **portals**: several spawn points, near enough to threaten, with a tank
+that starts near what it is defending rather than at the spawn. Spreading gates
+to the far side was tried and reverted — it made the mechanic expressible and
+the game worse.
+
+---
+
+## 9. Still missing for PoC parity
 
 Chunk 2 is done. Not carried over from the PoC: **splash damage and mortar
 arcs**, which belong with the tower types that use them, in chunk 3.
