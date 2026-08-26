@@ -42,7 +42,14 @@ const GOD_LEVERS = new Set([
 const COMPANION_OVERRIDES: Record<string, Record<string, number>> = {
   // reactMult = accelOnHit; the default 1.0 is an identity multiplier, so the
   // duration of a 1.0x multiplier is unobservable by construction.
-  'enemy.reactionDur': { 'enemy.accelOnHit': 0.5 },
+  //
+  // M0c-3 needed CHIP DAMAGE added on top. A reaction only fires on a hit that
+  // does not kill, and once towers could actually kill (and enemy types brought
+  // their own on-hit reactions that override the global lever) there were too
+  // few surviving hits per run to move the needle — measured identical at 0s
+  // and 3s. Weak, fast tower fire produces a stream of non-lethal hits, so the
+  // duration governs something continuously instead of a handful of times.
+  'enemy.reactionDur': { 'enemy.accelOnHit': 0.5, 'tower.damage': 0.2, 'tower.rate': 4 },
   // tower.damage and tank.damage saturate the upper half only because enemy.hp
   // defaults to 5 — both mid (~10) and max (20) one-shot enemies. With enemy.hp=20
   // the upper half is testable: mid(~10) chips, max(20) one-shots — telemetry differs.

@@ -89,6 +89,30 @@ export function planWave(wave: number, tuning: TuningStore, rng: Rng, gates: num
     prev = clamped;
   }
 
+  // ── surges ────────────────────────────────────────────────────────────────
+  // A wave that arrives on a perfect metronome has no shape. Surges pull a
+  // fraction of the spawns forward onto a few shared instants, so the wave has
+  // a middle — the "here it comes" beat — rather than only a start and an end.
+  // The PoC audit named burst-only spawning as its core pacing failure; this is
+  // deliberately the opposite of that, a drip WITH punctuation.
+  const surgeCount = Math.round(tuning.get('wave.surgeCount'));
+  if (surgeCount > 0 && rawTimes.length > 2) {
+    const span = rawTimes[rawTimes.length - 1]! || 1;
+    const share = tuning.get('wave.surgeSize');
+    const perSurge = Math.max(1, Math.floor((rawTimes.length * share) / surgeCount));
+    for (let sIdx = 0; sIdx < surgeCount; sIdx++) {
+      // Surges sit inside the wave, never at its very start or end: a surge on
+      // the first spawn is just a lump, and one on the last is just the tail.
+      const at = span * ((sIdx + 1) / (surgeCount + 1));
+      const start = Math.min(
+        rawTimes.length - perSurge,
+        Math.max(0, Math.round(rawTimes.length * ((sIdx + 1) / (surgeCount + 1)))),
+      );
+      for (let k = 0; k < perSurge; k++) rawTimes[start + k] = at;
+    }
+    rawTimes.sort((a, b) => a - b);
+  }
+
   // Assign gates round-robin, and pick a TYPE per spawn.
   //
   // Composition follows the reference ladder: wave N draws from the first N
@@ -98,6 +122,17 @@ export function planWave(wave: number, tuning: TuningStore, rng: Rng, gates: num
   // Difficulty ramps by which behaviours are present, not by count alone.
   const pool = typesByWave(wave);
   const headline = pool[pool.length - 1]!;
+
+  // NO MULTI-FRONT YET, AND IT IS NOT A TUNING PROBLEM. Both references open a
+  // second route mid-run — HokorobiTawaa after wave 6 — as a deliberate
+  // rug-pull that turns a perfect kill-box into half a defence. A lever for it
+  // was written and then removed, because TTD cannot express it: gates are the
+  // open neighbours of ONE spawn cell, which yields 1-2 of them (seed 42, the
+  // liveness seed, has exactly ONE). Gating "which gates are live" on a board
+  // with one gate does nothing at all.
+  //
+  // This needs real PORTALS — several spawn points placed around the board,
+  // as the PoC has — not a scheduling lever. Until then a wave has one front.
   const gateCount = gates.length;
   const events: SpawnEvent[] = rawTimes.map((at, i) => {
     // Every third spawn is the headline; the rest are drawn from the back

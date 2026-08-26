@@ -66,6 +66,20 @@ export const LEVERS: readonly Lever[] = [
     help: 'How many extra enemies are added per subsequent wave. 0 = flat; 3 = steep escalation.',
   },
   {
+    key: 'wave.surgeCount',
+    group: 'intensity',
+    label: 'Surges per wave',
+    min: 0, max: 4, step: 1, value: 1,
+    help: 'Bursts inside a wave where several enemies arrive at once instead of on the drip. A wave that arrives on a perfect metronome has no shape — the surge is the "here it comes" beat, and it is what gives a wave a middle rather than just a start and an end. 0 restores a pure even drip.',
+  },
+  {
+    key: 'wave.surgeSize',
+    group: 'intensity',
+    label: 'Surge size',
+    min: 0.1, max: 1, step: 0.05, value: 0.35,
+    help: 'Fraction of a wave that arrives inside its surges. At 0.35 roughly a third of the wave lands in bursts and the rest drips — enough to spike pressure without turning the whole wave back into the single lump the PoC audit identified as its core pacing failure.',
+  },
+  {
     key: 'wave.hpGrowth',
     group: 'intensity',
     label: 'Wave HP growth',

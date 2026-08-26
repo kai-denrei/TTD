@@ -157,9 +157,10 @@ test('C-1: parked tank contacts are speed-invariant (forward=0 gets no swept rad
     t.set('tank.speed', speed);
     t.set('tank.damage', 20); // one-shot so kills are countable
     t.set('wave.size', 20); t.set('wave.dripRate', 0.05); t.set('enemy.speed', 1.0);
-    // This test is about contact radius, not wave timing: skip the build phase
-    // so its pinned kill count measures the thing it claims to measure.
+    // This test is about contact radius, not wave pacing: skip the build phase
+    // and the surges so its pinned kill count measures the thing it claims to.
     t.set('wave.buildTime', 0);
+    t.set('wave.surgeCount', 0);
     const w = makeWorld({ seed: 3, tuning: t });
     // Parked tank — forward=0 means no movement, no displacement, no swept radius
     const steps = Math.round(3000 * (1 / 60) / dt);
@@ -183,9 +184,10 @@ test('C-1: parked tank contacts are speed-invariant (forward=0 gets no swept rad
     const t = makeTuning();
     t.set('tank.speed', 1); t.set('tank.damage', 20);
     t.set('wave.size', 20); t.set('wave.dripRate', 0.05); t.set('enemy.speed', 1.0);
-    // This test is about contact radius, not wave timing: skip the build phase
-    // so its pinned kill count measures the thing it claims to measure.
+    // This test is about contact radius, not wave pacing: skip the build phase
+    // and the surges so its pinned kill count measures the thing it claims to.
     t.set('wave.buildTime', 0);
+    t.set('wave.surgeCount', 0);
     const wCheck = makeWorld({ seed: 3, tuning: t });
     assert.ok(
       Math.abs(wCheck.tankContactRadius - 0.027) < 0.002,
@@ -217,9 +219,10 @@ test('C4 latch — tankHits is an event count, not inflated by low damage (NEW-3
     // lethal damage (damage=20 > enemy.hp=5): critter dies on first contact
     t.set('tank.damage', damage);
     t.set('wave.size', 20); t.set('wave.dripRate', 0.05); t.set('enemy.speed', 1.0);
-    // This test is about contact radius, not wave timing: skip the build phase
-    // so its pinned kill count measures the thing it claims to measure.
+    // This test is about contact radius, not wave pacing: skip the build phase
+    // and the surges so its pinned kill count measures the thing it claims to.
     t.set('wave.buildTime', 0);
+    t.set('wave.surgeCount', 0);
     const w = makeWorld({ seed: 3, tuning: t });
     for (let i = 0; i < 3000; i++) w.tick(1 / 60, { forward: 0, turn: 0, fire: false });
     return w.telemetry.data.tankHits;
