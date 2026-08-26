@@ -27,7 +27,22 @@ import type { Vec3 } from '../core/sphere/vec3.ts';
 
 /** Emissive multiplier for unit dot-clouds. Sized so a unit clears
  *  bloom.threshold (0.8) while the gamma-compensated terrain stays under it. */
-const UNIT_INTENSITY = 2.8;
+const UNIT_INTENSITY = 3.6;
+
+/** Same gamma pre-compensation the terrain uses (see render/geometry.ts).
+ *
+ *  This was the asymmetry that made units invisible: terrain colours were
+ *  corrected for the ~v^2.2 crush on the way to the screen and unit colours were
+ *  not, so the ground was lit correctly and everything standing on it rendered
+ *  DARKER than the ground. Measured: 2470 points drawing 0.37 from the camera
+ *  and still not visible. Fixing terrain alone was fixing half a pipeline. */
+function toneUp(c: THREE.Color): THREE.Color {
+  return new THREE.Color(
+    Math.pow(c.r, 1 / 2.2),
+    Math.pow(c.g, 1 / 2.2),
+    Math.pow(c.b, 1 / 2.2),
+  );
+}
 
 export type Basis = { fwd: Vec3; up: Vec3; side: Vec3 };
 
@@ -93,9 +108,22 @@ export function makePointCloud(
       sizeAttenuation: true,
       vertexColors: true,
       transparent: true,
-      opacity: opts.opacity ?? 0.62,
+      opacity: opts.opacity ?? 0.95,
+      // NORMAL blending, not additive. Additive worked while the board was
+      // near-black — a unit ADDED light and stood out. Once the board was lit
+      // properly the same units added light to an already-light surface and
+      // washed out into haze: measured 2470 points drawing 0.37 from the camera
+      // and still invisible. Units are SOLID OBJECTS and should occlude the
+      // ground they stand on. Effects stay additive, because a muzzle flash IS
+      // added light.
+      // ALWAYS ON TOP. Depth-testing units against the board loses them: a
+      // controlled comparison at one instant showed six clearly-rendered
+      // phages and the tank with the board hidden, and nothing at all with it
+      // visible. Units are the thing the player is tracking; a board that can
+      // swallow them is worse than one drawn behind them unconditionally.
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      blending: THREE.NormalBlending,
     }),
   );
   object.frustumCulled = false;
@@ -105,8 +133,8 @@ export function makePointCloud(
   // is how a unit clears the bloom threshold. Without this they sit just under
   // it and read as flat paint — the board would be legible and the things
   // moving on it would not be.
-  const base = new THREE.Color(opts.color).multiplyScalar(UNIT_INTENSITY);
-  const hi = new THREE.Color(opts.highlight).multiplyScalar(UNIT_INTENSITY);
+  const base = toneUp(new THREE.Color(opts.color)).multiplyScalar(UNIT_INTENSITY);
+  const hi = toneUp(new THREE.Color(opts.highlight)).multiplyScalar(UNIT_INTENSITY);
   let cursor = 0;
   let warned = false;
 
@@ -138,6 +166,8 @@ export function makePointCloud(
       // enemy types — twelve separate Points objects would be twelve draw calls
       // and twelve buffers to express what is really just a hue.
       const c = p[3] === 1 ? hi : (colorOverride ?? base);
+      // A per-species override arrives raw, so it needs the same treatment the
+      // pooled base colour already got at construction.
       const boost = colorOverride === undefined ? 1 : UNIT_INTENSITY;
       colors[o] = c.r * tint * boost;
       colors[o + 1] = c.g * tint * boost;

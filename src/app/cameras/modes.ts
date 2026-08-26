@@ -68,6 +68,19 @@ function at(n: Vec3, h: number): Vec3 {
   return [n[0] * h, n[1] * h, n[2] * h];
 }
 
+/** How far the build cameras sit above the surface, in sphere radii.
+ *
+ *  This was 1.15 — a camera 2.15 radii from the centre, which frames the whole
+ *  PLANET. At that distance a cell is a few pixels and a tower is a smudge:
+ *  every system underneath could be correct and the player would see a grey
+ *  ball. The reference games put you close enough to read individual cells,
+ *  because a tower defence is played on a board you can actually see.
+ *
+ *  0.34 puts roughly a dozen cells across the frame at zoom 1, which is the
+ *  scale at which a turret reads as a turret and a critter reads as a threat.
+ *  Zooming out is still available — it is just no longer the default. */
+const BUILD_HEIGHT = 0.34;
+
 export const CAMERA_MODES: readonly CameraMode[] = [
   {
     id: 'birdseye',
@@ -78,7 +91,7 @@ export const CAMERA_MODES: readonly CameraMode[] = [
       // up must be a TANGENT here, not the normal: looking straight down the
       // normal makes normal-as-up parallel to the view direction.
       const up = tangent(n, ctx.heading);
-      return { pos: at(n, 1 + 1.15 * ctx.zoom), look: ctx.anchor, up };
+      return { pos: at(n, 1 + BUILD_HEIGHT * ctx.zoom), look: ctx.anchor, up };
     },
   },
   {
@@ -92,8 +105,8 @@ export const CAMERA_MODES: readonly CameraMode[] = [
       const c = Math.cos(ctx.orbitYaw);
       const s = Math.sin(ctx.orbitYaw);
       const lat: Vec3 = [fwd[0] * c + side[0] * s, fwd[1] * c + side[1] * s, fwd[2] * c + side[2] * s];
-      const h = 1 + 0.9 * ctx.zoom;
-      const k = 0.85 * ctx.zoom;
+      const h = 1 + BUILD_HEIGHT * 0.8 * ctx.zoom;
+      const k = BUILD_HEIGHT * 0.75 * ctx.zoom;
       return {
         pos: [n[0] * h + lat[0] * k, n[1] * h + lat[1] * k, n[2] * h + lat[2] * k],
         look: ctx.anchor,
@@ -115,8 +128,8 @@ export const CAMERA_MODES: readonly CameraMode[] = [
       const c = Math.cos(a);
       const s = Math.sin(a);
       const lat: Vec3 = [fwd[0] * c + side[0] * s, fwd[1] * c + side[1] * s, fwd[2] * c + side[2] * s];
-      const h = 1 + 0.55 * ctx.zoom;
-      const k = 1.15 * ctx.zoom;
+      const h = 1 + BUILD_HEIGHT * 0.55 * ctx.zoom;
+      const k = BUILD_HEIGHT * 1.0 * ctx.zoom;
       return {
         pos: [n[0] * h + lat[0] * k, n[1] * h + lat[1] * k, n[2] * h + lat[2] * k],
         look: ctx.anchor,

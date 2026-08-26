@@ -24,11 +24,16 @@ const CRITTER_CAP = 200;
  *  keeping eight extra buffers cheap. Sizing every species at CRITTER_CAP would
  *  allocate 200 slots each for types that never appear together. */
 const SPECIES_CAP = 48;
+// Unit scales are a fraction of a cell (~0.068 world units). They were ~0.32 of
+// a cell, which is invisible: with the build camera now at board scale rather
+// than planet scale, a critter that small is a few dim pixels sitting on a cell
+// you can read clearly. At ~0.6 of a cell a turret reads as a turret and a
+// critter reads as a threat — which is the entire reason the models exist.
 const TOWER_CAP = 64;
-const CRITTER_SCALE = 0.022;
-const TOWER_SCALE = 0.03;
-const TANK_SCALE = 0.028;
-const HEART_SCALE = 0.055;
+const CRITTER_SCALE = 0.042;
+const TOWER_SCALE = 0.052;
+const TANK_SCALE = 0.05;
+const HEART_SCALE = 0.075;
 
 export type Units = { group: THREE.Group; sync(world: World): void };
 
@@ -155,7 +160,13 @@ const COLOR_CACHE = new Map<string, THREE.Color>();
 function typeColor(type: string, hex: number): THREE.Color {
   let c = COLOR_CACHE.get(type);
   if (c === undefined) {
-    c = new THREE.Color(hex);
+    // Gamma pre-compensated, matching the pooled base colours in points.ts and
+    // the terrain in geometry.ts. A raw colour here renders darker than the
+    // ground it stands on.
+    const raw = new THREE.Color(hex);
+    c = new THREE.Color(
+      Math.pow(raw.r, 1 / 2.2), Math.pow(raw.g, 1 / 2.2), Math.pow(raw.b, 1 / 2.2),
+    );
     COLOR_CACHE.set(type, c);
   }
   return c;
@@ -177,7 +188,17 @@ function liftFrom(p: Vec3, base: number, scale: number): Vec3 {
   return [p[0] * k, p[1] * k, p[2] * k];
 }
 
-/** Floor-standing units: critters, the tank, the heart. */
+/** Floor-standing units: critters, the tank, the heart.
+ *
+ *  Lifted ABOVE WALL HEIGHT, not to the floor. A critter standing on the floor
+ *  sits at ~1.038 while wall tops are at 1.045 — physically correct, and it
+ *  means anything walking a corridor is inside a trench and invisible from any
+ *  camera that is not perfectly overhead. That was why detailed models that
+ *  rendered perfectly in isolation could not be seen in play: the walls were in
+ *  front of them.
+ *
+ *  Floating slightly is the right trade for a game played looking down at a
+ *  board. Legibility beats physicality here. */
 function lift(p: Vec3, scale: number): Vec3 {
-  return liftFrom(p, 1, scale);
+  return liftFrom(p, 1 + WALL_HEIGHT, scale);
 }

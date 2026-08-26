@@ -8,11 +8,15 @@ test('defaults come from the schema', () => {
 });
 
 test('set clamps to range', () => {
+  // Reads the lever's declared bounds rather than hard-coding them: this test
+  // is about CLAMPING, not about what enemy.speed's range happens to be, and it
+  // broke when the range widened during M0c-3 calibration.
   const t = makeTuning();
-  t.set('enemy.speed', 999);
-  assert.equal(t.get('enemy.speed'), 3.0);
-  t.set('enemy.speed', -5);
-  assert.equal(t.get('enemy.speed'), 0.2);
+  const speed = LEVERS.find((l) => l.key === 'enemy.speed')!;
+  t.set('enemy.speed', speed.max + 1000);
+  assert.equal(t.get('enemy.speed'), speed.max);
+  t.set('enemy.speed', speed.min - 1000);
+  assert.equal(t.get('enemy.speed'), speed.min);
 });
 
 test('get on an unknown key throws (a typo must not silently read 0)', () => {

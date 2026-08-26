@@ -34,7 +34,7 @@ export const LEVERS: readonly Lever[] = [
     key: 'wave.dripRate',
     group: 'intensity',
     label: 'Drip rate (s)',
-    min: 0.1, max: 2.0, step: 0.05, value: 0.5,
+    min: 0.1, max: 2.0, step: 0.05, value: 0.35,
     help: 'Gap in seconds between individual enemy spawns within a wave. Low = lump, high = trickle. The HK finding: this changes the feel of every fight.',
   },
   {
@@ -55,7 +55,7 @@ export const LEVERS: readonly Lever[] = [
     key: 'wave.gap',
     group: 'intensity',
     label: 'Wave gap (s)',
-    min: 0, max: 20, step: 0.5, value: 8,
+    min: 0, max: 20, step: 0.5, value: 4,
     help: 'The macro breath between waves in seconds. The calm before the storm — long gaps let the player rebuild; short gaps keep pressure constant.',
   },
   {
@@ -91,7 +91,7 @@ export const LEVERS: readonly Lever[] = [
     key: 'wave.buildTime',
     group: 'intensity',
     label: 'Build time (s)',
-    min: 0, max: 60, step: 1, value: 10,
+    min: 0, max: 60, step: 1, value: 6,
     help: 'Quiet seconds before wave 1 arrives. You start with credit and nowhere to have spent it yet — without this the first wave lands while the board is still empty, which reads as the game starting without you. Both references give you a build phase; HokorobiTawaa uses 8s.',
   },
   {
@@ -107,8 +107,8 @@ export const LEVERS: readonly Lever[] = [
     key: 'enemy.speed',
     group: 'critters',
     label: 'Enemy speed',
-    min: 0.2, max: 3.0, step: 0.05, value: 1.0,
-    help: 'Global enemy movement speed. The lever the PoC never had — this single value retimes the entire game. Read per-tick, never baked.',
+    min: 0.2, max: 6.0, step: 0.05, value: 1.2,
+    help: 'Global enemy movement speed, in CELLS per second. The lever the PoC never had — this single value retimes the entire game. Read per-tick, never baked.',
   },
   {
     key: 'enemy.hp',
