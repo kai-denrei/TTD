@@ -14,7 +14,7 @@ import { BLOCKED } from '../sphere/dungeon.ts';
 import { sub, len } from '../sphere/vec3.ts';
 import type { Vec3 } from '../sphere/vec3.ts';
 import type { TuningStore } from '../tuning/store.ts';
-import { ENEMY_BY_TYPE } from './enemyspec.ts';
+import { ENEMY_BY_TYPE, HIT_REACT_DUR, REGEN_DELAY } from './enemyspec.ts';
 import type { Rng } from './rng.ts';
 
 // ---- Public type ------------------------------------------------------------
@@ -43,7 +43,12 @@ export type Critter = {
   // tank contact cooldown
   contactLeft: number; // seconds remaining before this critter can ram the tank again (0 = ready)
   bornAt: number;
-  firstHitAt: number | null; // null until first damage lands; used for true TTK calculation
+  firstHitAt: number | null;
+  /** Spawn HP. Regenerators heal back toward this, never past it. */
+  hpMax: number;
+  /** When damage last landed. Regen waits REGEN_DELAY after this, so a
+   *  regenerator that is being chipped never heals — which is the point. */
+  lastHitAt: number; // null until first damage lands; used for true TTK calculation
 };
 
 // ---- Easing rate ------------------------------------------------------------
@@ -136,6 +141,8 @@ export function spawnCritter(
     contactLeft: 0,
     bornAt: now,
     firstHitAt: null,
+    hpMax: hp,
+    lastHitAt: -Infinity,
   };
   return c;
 }
@@ -158,11 +165,11 @@ export function effectiveSpeed(c: Critter, tuning: TuningStore): number {
 export function stepCritter(
   c: Critter,
   dt: number,
-  ctx: { mesh: SphereMesh; dungeon: Dungeon; tuning: TuningStore; rng: Rng },
+  ctx: { mesh: SphereMesh; dungeon: Dungeon; tuning: TuningStore; rng: Rng; now: number },
 ): 'moving' | 'arrived' {
   if (!c.alive) return 'moving';
 
-  const { mesh, dungeon, tuning, rng } = ctx;
+  const { mesh, dungeon, tuning, rng, now } = ctx;
 
   // ── 1. Update speed envelope ──────────────────────────────────────────────
   c.envLeft -= dt;
@@ -182,6 +189,19 @@ export function stepCritter(
     c.envValue += diff * Math.min(1, EASE_RATE * dt);
     // Clamp to [1-amp, 1+amp] so floating-point drift can't escape
     c.envValue = Math.max(1 - amp, Math.min(1 + amp, c.envValue));
+  }
+
+  // ── 1b. Regeneration ──────────────────────────────────────────────────────
+  // A regenerator heals only after going REGEN_DELAY seconds unhit, which is
+  // what makes it punish chip damage specifically: a trickle that never quite
+  // kills leaves it at full health, while one committed burst finishes it.
+  // This is the mechanic that makes tower CHOICE matter more than tower count.
+  const spec = ENEMY_BY_TYPE.get(c.type);
+  if (spec?.regen !== undefined && spec.regen > 0) {
+    const sinceHit = now - c.lastHitAt;
+    if (sinceHit >= REGEN_DELAY && c.hp < c.hpMax) {
+      c.hp = Math.min(c.hpMax, c.hp + spec.regen * dt);
+    }
   }
 
   // ── 2. Update hit reaction timer, slow field, and tank contact cooldown ──
@@ -282,15 +302,30 @@ export function hitCritter(c: Critter, damage: number, tuning: TuningStore, now?
   if (c.firstHitAt === null && now !== undefined) {
     c.firstHitAt = now;
   }
+  if (now !== undefined) c.lastHitAt = now;
   c.hp -= damage;
   if (c.hp <= 0) {
     c.alive = false;
     return true;
   }
-  // Apply hit reaction
-  const accel = tuning.get('enemy.accelOnHit');
-  const dur = tuning.get('enemy.reactionDur');
-  c.reactMult = accel;
-  c.reactLeft = dur;
+
+  // Hit reaction. A type's OWN accelOnHit or slowOnHit wins over the global
+  // lever, because that reaction is the type's identity — a barbed mine that
+  // does not lunge when shot is just a slow mine. The global lever still
+  // applies to everything without its own reaction, so it keeps tuning the
+  // board rather than becoming decorative.
+  //
+  // Shooting something CHANGES WHAT IT DOES: accelerators punish chip fire,
+  // self-slowers reward it. That is what makes tower choice matter more than
+  // tower count, and it is the mechanic the reference leans on hardest.
+  const spec = ENEMY_BY_TYPE.get(c.type);
+  const typeReact = spec?.accelOnHit ?? spec?.slowOnHit;
+  if (typeReact !== undefined) {
+    c.reactMult = typeReact;
+    c.reactLeft = HIT_REACT_DUR;
+  } else {
+    c.reactMult = tuning.get('enemy.accelOnHit');
+    c.reactLeft = tuning.get('enemy.reactionDur');
+  }
   return false;
 }

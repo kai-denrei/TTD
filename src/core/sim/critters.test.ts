@@ -14,7 +14,7 @@ test('speed envelope stays within [1-amp, 1+amp]', () => {
   const t = makeTuning(); t.set('enemy.surgeAmp', 0.5);
   const c = spawnCritter(0, D.spawn, t, stream(1, 'x'), 0);
   for (let i = 0; i < 3000; i++) {
-    stepCritter(c, 0.016, { mesh: MESH, dungeon: D, tuning: t, rng: stream(1, 'x') });
+    stepCritter(c, 0.016, { mesh: MESH, dungeon: D, tuning: t, rng: stream(1, 'x') , now: 0 });
     assert.ok(c.envValue >= 0.5 - 1e-6 && c.envValue <= 1.5 + 1e-6, `envelope escaped: ${c.envValue}`);
   }
 });
@@ -22,7 +22,7 @@ test('speed envelope stays within [1-amp, 1+amp]', () => {
 test('zero amplitude means constant speed', () => {
   const t = makeTuning(); t.set('enemy.surgeAmp', 0);
   const c = spawnCritter(0, D.spawn, t, stream(1, 'x'), 0);
-  for (let i = 0; i < 200; i++) stepCritter(c, 0.016, { mesh: MESH, dungeon: D, tuning: t, rng: stream(1, 'x') });
+  for (let i = 0; i < 200; i++) stepCritter(c, 0.016, { mesh: MESH, dungeon: D, tuning: t, rng: stream(1, 'x') , now: 0 });
   assert.ok(Math.abs(c.envValue - 1) < 1e-6);
 });
 
@@ -32,7 +32,7 @@ test('the envelope actually varies when amplitude is high', () => {
   const c = spawnCritter(0, D.spawn, t, rng, 0);
   const seen = new Set<string>();
   for (let i = 0; i < 600; i++) {
-    stepCritter(c, 0.016, { mesh: MESH, dungeon: D, tuning: t, rng });
+    stepCritter(c, 0.016, { mesh: MESH, dungeon: D, tuning: t, rng, now: 0 });
     seen.add(c.envValue.toFixed(2));
   }
   assert.ok(seen.size > 5, 'envelope is not varying');
@@ -55,7 +55,7 @@ test('accelOnHit applies for reactionDur then expires', () => {
   const c = spawnCritter(0, D.spawn, t, stream(4, 'x'), 0);
   hitCritter(c, 1, t);
   assert.equal(c.reactMult, 2);
-  for (let i = 0; i < 40; i++) stepCritter(c, 0.05, { mesh: MESH, dungeon: D, tuning: t, rng: stream(4, 'x') });
+  for (let i = 0; i < 40; i++) stepCritter(c, 0.05, { mesh: MESH, dungeon: D, tuning: t, rng: stream(4, 'x') , now: 0 });
   assert.equal(c.reactMult, 1, 'reaction never expired');
 });
 
@@ -65,7 +65,7 @@ test('a critter walks downhill to the heart and arrives', () => {
   const c = spawnCritter(0, D.spawn, t, rng, 0);
   let result: string = 'moving';
   for (let i = 0; i < 20000 && result === 'moving'; i++) {
-    result = stepCritter(c, 0.016, { mesh: MESH, dungeon: D, tuning: t, rng });
+    result = stepCritter(c, 0.016, { mesh: MESH, dungeon: D, tuning: t, rng, now: 0 });
   }
   assert.equal(result, 'arrived', 'critter never reached the heart');
 });
@@ -75,7 +75,7 @@ test('a critter never enters a blocked cell', () => {
   const rng = stream(6, 'walk');
   const c = spawnCritter(0, D.spawn, t, rng, 0);
   for (let i = 0; i < 5000; i++) {
-    if (stepCritter(c, 0.016, { mesh: MESH, dungeon: D, tuning: t, rng }) === 'arrived') break;
+    if (stepCritter(c, 0.016, { mesh: MESH, dungeon: D, tuning: t, rng, now: 0 }) === 'arrived') break;
     assert.notEqual(D.tags[c.cur], BLOCKED, 'walked into a wall');
   }
 });

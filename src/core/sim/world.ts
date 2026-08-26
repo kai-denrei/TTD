@@ -273,7 +273,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     const arrivedIds = new Set<number>();
     for (const c of critters) {
       if (!c.alive) continue;
-      const result = stepCritter(c, dt, { mesh, dungeon, tuning, rng: crittersRng });
+      const result = stepCritter(c, dt, { mesh, dungeon, tuning, rng: crittersRng, now: elapsed });
       if (result === 'arrived') {
         arrivedIds.add(c.id);
       }

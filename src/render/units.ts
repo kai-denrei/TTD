@@ -13,6 +13,7 @@ import { minePts } from '../core/models/mine.ts';
 import { makePointCloud, basisAt } from './points.ts';
 import { WALL_HEIGHT } from './geometry.ts';
 import { HEART_MAX_HP } from '../core/sim/world.ts';
+import { ENEMY_BY_TYPE } from '../core/sim/enemyspec.ts';
 import type { World } from '../core/sim/world.ts';
 import type { Vec3 } from '../core/sphere/vec3.ts';
 
@@ -60,7 +61,20 @@ export function makeUnits(): Units {
       // Heading: toward the cell it walks to, so critters face their path.
       const target = mesh.centers[c.next] ?? c.pos;
       const heading: Vec3 = [target[0] - c.pos[0], target[1] - c.pos[1], target[2] - c.pos[2]];
-      critters.add(lift(c.pos, CRITTER_SCALE), CRITTER_SCALE, basisAt(n, heading), 1);
+
+      // Colour and size come from the enemy's TYPE. Twelve types that all look
+      // identical are twelve types the player cannot plan against — the whole
+      // value of a roster is that you recognise a threat before it arrives, and
+      // read it off the board rather than off a UI panel.
+      const spec = ENEMY_BY_TYPE.get(c.type);
+      const scale = CRITTER_SCALE * (spec?.size ?? 0.45) / 0.45;
+      const col = typeColor(c.type, spec?.color ?? 0xff5a3c);
+
+      // Damage shows as DIMMING rather than a health bar: HokorobiTawaa renders
+      // remaining life on the actor itself so the board stays clean and you
+      // judge threat by silhouette, not chrome.
+      const hpFrac = c.hpMax > 0 ? Math.max(0, c.hp) / c.hpMax : 1;
+      critters.add(lift(c.pos, scale), scale, basisAt(n, heading), 0.45 + 0.55 * hpFrac, col);
     }
     critters.end();
 
@@ -101,6 +115,19 @@ export function makeUnits(): Units {
   }
 
   return { group, sync };
+}
+
+/** Enemy colours are cached: ENEMY_BY_TYPE returns a hex number, and
+ *  allocating a THREE.Color per critter per frame would churn garbage during
+ *  exactly the busiest moments. */
+const COLOR_CACHE = new Map<string, THREE.Color>();
+function typeColor(type: string, hex: number): THREE.Color {
+  let c = COLOR_CACHE.get(type);
+  if (c === undefined) {
+    c = new THREE.Color(hex);
+    COLOR_CACHE.set(type, c);
+  }
+  return c;
 }
 
 /** Unit sphere, so a surface position IS its own normal. */

@@ -60,7 +60,7 @@ export function basisAt(normal: Vec3, heading: Vec3): Basis {
 export type PointCloud = {
   object: THREE.Points;
   begin(): void;
-  add(pos: Vec3, scale: number, basis: Basis, tint: number): void;
+  add(pos: Vec3, scale: number, basis: Basis, tint: number, colorOverride?: THREE.Color): void;
   end(): void;
 };
 
@@ -105,7 +105,7 @@ export function makePointCloud(
     cursor = 0;
   }
 
-  function add(pos: Vec3, scale: number, basis: Basis, tint: number): void {
+  function add(pos: Vec3, scale: number, basis: Basis, tint: number, colorOverride?: THREE.Color): void {
     if (cursor >= capacity) {
       // A reallocation stall mid-wave is worse than a missing dot, so the
       // ceiling is hard. Warn once so it is visible if it ever binds.
@@ -125,7 +125,10 @@ export function makePointCloud(
       positions[o] = pos[0] + px * fwd[0] + py * up[0] + pz * side[0];
       positions[o + 1] = pos[1] + px * fwd[1] + py * up[1] + pz * side[1];
       positions[o + 2] = pos[2] + px * fwd[2] + py * up[2] + pz * side[2];
-      const c = p[3] === 1 ? hi : base;
+      // A per-instance colour lets one pooled cloud draw a whole roster of
+      // enemy types — twelve separate Points objects would be twelve draw calls
+      // and twelve buffers to express what is really just a hue.
+      const c = p[3] === 1 ? hi : (colorOverride ?? base);
       colors[o] = c.r * tint;
       colors[o + 1] = c.g * tint;
       colors[o + 2] = c.b * tint;
