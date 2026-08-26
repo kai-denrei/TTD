@@ -8,7 +8,7 @@
 //   - "live: true" is implicit for all M0 levers — the whole point of this
 //     system is that nothing is baked at construction.
 
-export type LeverGroup = 'intensity' | 'critters' | 'player' | 'feel' | 'camera' | 'god';
+export type LeverGroup = 'intensity' | 'critters' | 'player' | 'economy' | 'feel' | 'camera' | 'god';
 
 export type Lever = {
   key: string;
@@ -201,6 +201,50 @@ export const LEVERS: readonly Lever[] = [
     label: 'Tank range',
     min: 0.05, max: 0.6, step: 0.025, value: 0.25,
     help: 'Tank shot range in world chord distance. Typical cell spacing ~0.07; 0.25 covers ~3–4 cells.',
+  },
+
+  // ── economy ────────────────────────────────────────────────────────────────
+  {
+    key: 'eco.startCredit',
+    group: 'economy',
+    label: 'Starting credit',
+    min: 0, max: 1000, step: 10, value: 190,
+    help: 'Credit at the start of a run. Both reference games start at 190. This sets how much defence you can commit before the first wave teaches you anything.',
+  },
+  {
+    key: 'eco.streakStep',
+    group: 'economy',
+    label: 'Streak step',
+    min: 0, max: 0.2, step: 0.01, value: 0.05,
+    help: 'Bounty multiplier gained per consecutive kill. At 0.05 it takes 80 unbroken kills to reach the cap. 0 disables the streak entirely, which is the cleanest way to test how much of the tension it is actually carrying.',
+  },
+  {
+    key: 'eco.streakCap',
+    group: 'economy',
+    label: 'Streak cap',
+    min: 1, max: 10, step: 0.5, value: 5,
+    help: 'Ceiling on the streak multiplier. Any leak resets the streak to zero, so a leak costs a life AND your income curve — the reference calls that the main reason play feels tense rather than idle.',
+  },
+  {
+    key: 'eco.ramPremium',
+    group: 'economy',
+    label: 'Ram premium',
+    min: 1, max: 3, step: 0.1, value: 1.5,
+    help: 'Bounty multiplier for kills the tank makes by ramming rather than shooting. The PoC pays 1.5x, rewarding the riskiest way to kill something.',
+  },
+  {
+    key: 'eco.trickle',
+    group: 'economy',
+    label: 'Passive income (/s)',
+    min: 0, max: 20, step: 0.5, value: 0,
+    help: 'Credit per second regardless of kills. DEFAULT 0, matching both references: income from kills only, with flat bounties against rising enemy counts, means money tightens automatically and you can never out-farm the ramp. Raise it to find out what that pressure was worth.',
+  },
+  {
+    key: 'eco.sellRefund',
+    group: 'economy',
+    label: 'Sell refund',
+    min: 0, max: 1, step: 0.05, value: 0.75,
+    help: 'Fraction of everything sunk into a tower (purchase plus upgrades) returned on sale. Both references use 0.75, which makes repositioning cheap enough to be a real option.',
   },
 
   // ── feel ───────────────────────────────────────────────────────────────────

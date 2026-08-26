@@ -20,7 +20,7 @@ import { makePresets } from './presets.ts';
 import { makeTelemetryView } from './telemetry.ts';
 import { makeCompare } from './compare.ts';
 
-const GROUP_ORDER: LeverGroup[] = ['intensity', 'critters', 'player', 'feel', 'camera', 'god'];
+const GROUP_ORDER: LeverGroup[] = ['intensity', 'critters', 'player', 'economy', 'feel', 'camera', 'god'];
 const OPEN_KEY = 'ttd.admin.open';
 
 export type Dashboard = { toggle(): void; sync(world: World): void; el: HTMLElement };
