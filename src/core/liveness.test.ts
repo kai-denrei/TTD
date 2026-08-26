@@ -29,6 +29,31 @@ const COMPANION_OVERRIDES: Record<string, Record<string, number>> = {
   'enemy.reactionDur': { 'enemy.accelOnHit': 0.5 },
 };
 
+// NEW-B: Levers that legitimately saturate before their declared max.
+// The telemetry effect flattens before the slider top, so the standard min-vs-max
+// sweep passes but the mid-vs-max comparison may not.
+// Each entry here is a documented exception — not a silent skip.
+//
+// tower.range: chord distance on unit sphere. At range=0.30+ the tower covers
+//   nearly the entire reachable path and kills everything; both 0.30 and 0.60 give
+//   the same telemetry (all critters die before reaching the heart). The min-vs-max
+//   sweep still fires because 0.05 (min) is genuinely different — just that the
+//   upper half of the range saturates.
+//
+// time.scale: speeds up or slows down the sim uniformly. At high values the 3000-tick
+//   scripted run covers wildly different game-time and the telemetry aggregates are
+//   not comparable (they accumulate proportionally to game-time, not ticks). The lever
+//   is live — the min-vs-max test passes — but the upper half (time.scale=2.05 vs 4.0)
+//   produces proportionally-scaled-but-not-equal values: mid gives twice the game-time
+//   of base, max gives 4x, so telemetry ratios (macroShare etc.) may stay identical
+//   while raw values differ. Skip upper-half for time.scale to avoid flaky assertions.
+const SATURATING = new Set([
+  'tower.range',  // covers full nav path at upper ~40% of range
+  'time.scale',   // proportional scaling: upper-half ratios may be identical even as raws differ
+  'tower.damage', // above enemy.hp (default 5), enemies die on first shot; mid=10.25 and max=20 both one-shot
+  'tank.damage',  // same one-shot saturation: mid=10.25 and max=20 both exceed enemy.hp; ttkMean=0 at both
+]);
+
 function runWith(overrides: Record<string, number>, seed = 42, ticks = 3000): Record<string, number> {
   const t = makeTuning();
   for (const [k, v] of Object.entries(overrides)) t.set(k, v);
@@ -53,16 +78,32 @@ describe('liveness — every sim lever must move the telemetry needle', () => {
       const hi = runWith({ ...companion, [lever.key]: lever.max });
       assert.notDeepEqual(lo, hi, `lever ${lever.key} is DEAD — telemetry identical at min and max`);
     });
+
+    // NEW-B: also assert upper-half sensitivity — lever must differ across its top half
+    // (50th percentile vs max). COMPANION_OVERRIDES levers skip: the companion is not
+    // swept with the mid value, contaminating the comparison.
+    // SATURATING levers skip with documented rationale above.
+    if (!SATURATING.has(lever.key) && !COMPANION_OVERRIDES[lever.key]) {
+      test(`lever ${lever.key} is live in upper half`, () => {
+        if (lever.min >= lever.max) return;
+        const mid = lever.min + (lever.max - lever.min) * 0.5;
+        const lo = runWith({ [lever.key]: mid });
+        const hi = runWith({ [lever.key]: lever.max });
+        assert.notDeepEqual(lo, hi, `lever ${lever.key} is SATURATED in upper half — add to SATURATING with rationale if this is intentional`);
+      });
+    }
   }
 
   // Targeted god-mode tests
-  test('god.heartInvulnerable prevents HP loss but still counts hits', () => {
+  test('god.heartInvulnerable prevents HP loss but still counts leaks (I6 fix)', () => {
+    // I6: leak = critter arrived (always); heartHit = damage applied (skipped in god mode)
     const t = makeTuning();
     t.set('god.heartInvulnerable', 1); t.set('enemy.speed', 3); t.set('wave.size', 20); t.set('wave.dripRate', 0.05);
     const w = makeWorld({ seed: 42, tuning: t });
     const hp0 = w.heartHp;
     for (let i = 0; i < 8000; i++) w.tick(1 / 60, { forward: 1, turn: 0, fire: false });
-    assert.ok(w.telemetry.data.heartHits > 0, 'nothing reached the heart');
+    assert.ok(w.telemetry.data.leaks > 0, 'nothing reached the heart');
+    assert.equal(w.telemetry.data.heartHits, 0, 'heartHit fires only when damage is applied (not in god mode)');
     assert.equal(w.heartHp, hp0, 'heart HP changed despite god mode');
   });
 
