@@ -27,32 +27,21 @@ const COMPANION_OVERRIDES: Record<string, Record<string, number>> = {
   // reactMult = accelOnHit; the default 1.0 is an identity multiplier, so the
   // duration of a 1.0x multiplier is unobservable by construction.
   'enemy.reactionDur': { 'enemy.accelOnHit': 0.5 },
+  // tower.damage and tank.damage saturate the upper half only because enemy.hp
+  // defaults to 5 — both mid (~10) and max (20) one-shot enemies. With enemy.hp=20
+  // the upper half is testable: mid(~10) chips, max(20) one-shots — telemetry differs.
+  'tower.damage': { 'enemy.hp': 20 },
+  'tank.damage':  { 'enemy.hp': 20 },
 };
 
 // NEW-B: Levers that legitimately saturate before their declared max.
 // The telemetry effect flattens before the slider top, so the standard min-vs-max
 // sweep passes but the mid-vs-max comparison may not.
-// Each entry here is a documented exception — not a silent skip.
-//
-// tower.range: chord distance on unit sphere. At range=0.30+ the tower covers
-//   nearly the entire reachable path and kills everything; both 0.30 and 0.60 give
-//   the same telemetry (all critters die before reaching the heart). The min-vs-max
-//   sweep still fires because 0.05 (min) is genuinely different — just that the
-//   upper half of the range saturates.
-//
-// time.scale: speeds up or slows down the sim uniformly. At high values the 3000-tick
-//   scripted run covers wildly different game-time and the telemetry aggregates are
-//   not comparable (they accumulate proportionally to game-time, not ticks). The lever
-//   is live — the min-vs-max test passes — but the upper half (time.scale=2.05 vs 4.0)
-//   produces proportionally-scaled-but-not-equal values: mid gives twice the game-time
-//   of base, max gives 4x, so telemetry ratios (macroShare etc.) may stay identical
-//   while raw values differ. Skip upper-half for time.scale to avoid flaky assertions.
-const SATURATING = new Set([
-  'tower.range',  // covers full nav path at upper ~40% of range
-  'time.scale',   // proportional scaling: upper-half ratios may be identical even as raws differ
-  'tower.damage', // above enemy.hp (default 5), enemies die on first shot; mid=10.25 and max=20 both one-shot
-  'tank.damage',  // same one-shot saturation: mid=10.25 and max=20 both exceed enemy.hp; ttkMean=0 at both
-]);
+// Each entry here is a documented exception with a rationale — not a silent skip.
+// (I-2 fix: former entries tower.range, time.scale, tower.damage, tank.damage removed —
+//  tower.range and time.scale pass the upper-half gate empirically; tower.damage and
+//  tank.damage are now testable via COMPANION_OVERRIDES with enemy.hp=20.)
+const SATURATING = new Set<string>();
 
 function runWith(overrides: Record<string, number>, seed = 42, ticks = 3000): Record<string, number> {
   const t = makeTuning();
