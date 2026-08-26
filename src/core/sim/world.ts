@@ -60,6 +60,9 @@ export type World = {
   telemetry: ReturnType<typeof makeTelemetry>;
   waves: WaveEngine;
   elapsed: number;
+  /** Contact radius used for tank ram detection (0.4 × mean chord length of the mesh).
+   *  Exposed so tests can assert directly rather than inferring from kill counts. */
+  tankContactRadius: number;
   tick(dt: number, input: TankInput): void;
   /** Place a tower on an open (non-BLOCKED) cell. Returns false if the cell is BLOCKED or already occupied.
    *  One tower per cell is enforced. Counts a decision only on success.
@@ -102,7 +105,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   // Algorithm: mean chord length across all adjacent cell pairs in the mesh
   //   (captures the actual local cell spacing, not an approximation).
   // Fraction: 0.4 × mean chord.
-  //   - MESH_POINTS=600 yields ~2660–2700 output quads (varies by seed); mean chord ≈ 0.068 → radius ≈ 0.027.
+  //   - MESH_POINTS=600 yields ~2640–2700 output quads (varies by seed); mean chord ≈ 0.068 → radius ≈ 0.027.
   //   - Measured minimum gate-to-spawn across seeds 1–60 is 0.047 (seed 57),
   //     so 0.027 keeps spawned critters outside the contact zone.
   //   - A critter must travel ~0.4 of a cell before it can trigger a ram hit,
@@ -371,6 +374,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     telemetry,
     waves,
     get elapsed() { return elapsed; },
+    tankContactRadius,
     tick,
     placeTower,
     setMacro,

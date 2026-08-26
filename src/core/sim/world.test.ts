@@ -117,6 +117,15 @@ test('C4 ram — high damage kills on contact (seed 3, damage=20)', () => {
     'expected ram contacts from pass-through critters (seed 3), got 0 — contact path broken');
   assert.ok(w.telemetry.data.killsByPlayer > 0,
     'high damage should kill on contact; no kills means hitCritter path broken');
+  // MINOR 3: one-shot contract — ttk must be 0 for all contact kills when damage=20 (one-shot).
+  // Contract: firstHitAt is stamped before damage is applied (critters.ts:252-255), so
+  // elapsed - firstHitAt = 0 on the same tick as the kill. Assert at least one ttk entry
+  // is exactly 0 and that every player-kill ttk in this run is 0.
+  assert.ok(w.telemetry.data.ttk.length > 0, 'expected kills to have ttk entries');
+  assert.ok(
+    w.telemetry.data.ttk.every((v) => v === 0),
+    `one-shot kills must all have ttk=0; got non-zero ttk: ${w.telemetry.data.ttk.filter((v) => v !== 0).join(', ')}`,
+  );
 });
 
 // C-1 regression: parked tank contact radius must be speed-invariant.
@@ -144,7 +153,22 @@ test('C-1: parked tank contacts are speed-invariant (forward=0 gets no swept rad
     `parked tank speed-invariance broken: kills at speed=0.5: ${killsMinSpeed}, at speed=10: ${killsMaxSpeed}`);
   // Baseline pin: confirms the count itself, not just equality — catches radius drift
   // that would inflate kills without breaking the speed-equality assertion above.
+  // NOTE: this pin has a wide blind band (radius 0.5×–3× all yield 44 kills); use the
+  // direct radius assertion below as the authoritative drift detector.
   assert.equal(killsMinSpeed, 44, `baseline kill count drifted from 44 — radius or critter flow changed`);
+  // Direct radius assertion: asserts the computed tankContactRadius rather than
+  // inferring it from kill counts (which have a blind band of 0.5×–3× the true radius).
+  // Constructed from the same seed=3 world so we can inspect its radius.
+  {
+    const t = makeTuning();
+    t.set('tank.speed', 1); t.set('tank.damage', 20);
+    t.set('wave.size', 20); t.set('wave.dripRate', 0.05); t.set('enemy.speed', 1.0);
+    const wCheck = makeWorld({ seed: 3, tuning: t });
+    assert.ok(
+      Math.abs(wCheck.tankContactRadius - 0.027) < 0.002,
+      `contact radius ${wCheck.tankContactRadius} drifted from the derived ~0.027`,
+    );
+  }
   // Same speed, different dt — must be equal (radius should not vary with dt when parked)
   // Reuse killsMaxSpeed (speed=10, dt=1/60) — avoids re-running the same sim.
   const kills30fps = run(10, 1 / 30);
@@ -228,7 +252,8 @@ test('I-1: heartHits never exceeds HEART_MAX_HP (no post-mortem phantom hits)', 
   scripted(w, 6000);
   assert.equal(w.heartHp, 0, 'heart should have died on this config');
   assert.ok(w.telemetry.data.leaks > w.telemetry.data.heartHits, 'leaks must outrun hits after death');
-  assert.ok(w.telemetry.data.heartHits <= 20, `heartHits ${w.telemetry.data.heartHits} exceeds HEART_MAX_HP`);
+  assert.equal(w.telemetry.data.heartHits, 20,
+    `heartHits must be exactly HEART_MAX_HP=20 (got ${w.telemetry.data.heartHits}) — post-mortem phantom hits or undercounting`);
 });
 
 // NEW-A: heart death telemetry
