@@ -31,6 +31,8 @@ import type { Dungeon } from '../sphere/dungeon.ts';
 import { generateDungeon, BLOCKED, isFrontierWall } from '../sphere/dungeon.ts';
 import type { TuningStore } from '../tuning/store.ts';
 import { makeTelemetry } from './telemetry.ts';
+import { makeEventBuffer } from './events.ts';
+import type { WorldEvent } from './events.ts';
 import type { Rng } from './rng.ts';
 import { stream } from './rng.ts';
 import type { Critter } from './critters.ts';
@@ -64,6 +66,11 @@ export type World = {
    *  Exposed so tests can assert directly rather than inferring from kill counts. */
   tankContactRadius: number;
   tick(dt: number, input: TankInput): void;
+  /** Everything that happened during the last tick, as plain data. The renderer
+   *  drains this to draw shots, impacts and deaths — M0b had no such channel,
+   *  which is why combat was invisible. Cleared at the START of each tick, so a
+   *  headless run with no renderer never accumulates. */
+  drainEvents(): WorldEvent[];
   /** Place a tower on HIGH GROUND: a BLOCKED cell bordering open ground.
    *  Returns false for open cells, buried walls, and occupied cells.
    *  One tower per cell; counts a decision only on success. */
@@ -176,6 +183,9 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   // ── Telemetry ─────────────────────────────────────────────────────────────
   const telemetry = makeTelemetry();
 
+  // ── Events ────────────────────────────────────────────────────────────────
+  const events = makeEventBuffer();
+
   // ── Elapsed (post-scale) ──────────────────────────────────────────────────
   let elapsed = 0;
   let waveStartedAt = 0;   // stamped when a wave begins spawning; see tick step 2
@@ -183,6 +193,11 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   // ---- tick -----------------------------------------------------------------
 
   function tick(rawDt: number, input: TankInput): void {
+    // ── 0. Clear last tick's events ─────────────────────────────────────────
+    // Before anything else, and never on drain: a headless sweep has no
+    // renderer, so draining is not guaranteed to happen at all.
+    events.clear();
+
     // ── 1. Scale dt ─────────────────────────────────────────────────────────
     // LOAD-BEARING ORDER: dt *= time.scale is first — every system sees scaled time.
     const dt = rawDt * tuning.get('time.scale');
@@ -247,6 +262,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       // Also gated on heartHp > 0 to prevent post-mortem phantom hits.
       if (heartHp > 0) {
         telemetry.heartHit();
+        events.emit({ kind: 'heartHit', at: mesh.centers[dungeon.heart] ?? [0, 1, 0] });
         if (!tuning.flag('god.heartInvulnerable')) {
           heartHp -= 1;
           if (heartHp === 0) telemetry.recordHeartDeath(elapsed);
@@ -301,6 +317,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       if (d <= r) {
         c.contactLeft = TANK_CONTACT_COOLDOWN;
         telemetry.tankHit();
+        events.emit({ kind: 'tankHit', at: tank.pos });
         tank.hits += 1;
         if (!tuning.flag('god.tankInvulnerable')) { tank.hp -= 1; if (tank.hp < 0) tank.hp = 0; }
         if (hitCritter(c, tuning.get('tank.damage'), tuning, elapsed)) {
@@ -386,6 +403,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     get elapsed() { return elapsed; },
     tankContactRadius,
     tick,
+    drainEvents: () => events.drain(),
     placeTower,
     setMacro,
   };
