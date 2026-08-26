@@ -125,6 +125,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
 
   // ── Elapsed (post-scale) ──────────────────────────────────────────────────
   let elapsed = 0;
+  let waveStartedAt = 0;   // stamped when a wave begins spawning; see tick step 2
 
   // ---- tick -----------------------------------------------------------------
 
@@ -135,10 +136,21 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     elapsed += dt;
 
     // ── 2. Waves tick (queues spawns via onSpawn callback) ──────────────────
+    const stateBefore = waves.state;
     waves.tick(dt, {
       enemiesAlive: critters.filter((c) => c.alive).length,
       onSpawn: (gate: number) => { pendingSpawns.push(gate); },
     });
+    // Wave-clear timing. The engine enters 'breathing' exactly when the field
+    // has drained to its overlap threshold — that transition IS the wave being
+    // cleared, so it is the only honest place to stamp the duration. Watched
+    // here rather than inside the engine so the engine stays free of telemetry.
+    if (stateBefore !== 'breathing' && waves.state === 'breathing') {
+      telemetry.waveCleared(elapsed - waveStartedAt);
+    }
+    if (stateBefore !== 'spawning' && waves.state === 'spawning') {
+      waveStartedAt = elapsed;
+    }
 
     // ── 3. Spawn pending critters ────────────────────────────────────────────
     for (const gate of pendingSpawns) {
