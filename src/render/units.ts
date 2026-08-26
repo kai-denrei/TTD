@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { turretPts } from '../core/models/turret.ts';
 import { minePts } from '../core/models/mine.ts';
 import { makePointCloud, basisAt } from './points.ts';
+import { WALL_HEIGHT } from './geometry.ts';
 import { HEART_MAX_HP } from '../core/sim/world.ts';
 import type { World } from '../core/sim/world.ts';
 import type { Vec3 } from '../core/sphere/vec3.ts';
@@ -65,7 +66,13 @@ export function makeUnits(): Units {
 
     towers.begin();
     for (const t of world.towers) {
-      towers.add(lift(t.pos, TOWER_SCALE), TOWER_SCALE, basisAt(normalOf(t.pos), [0, 1, 0]), 1);
+      // Towers stand on HIGH GROUND: clear the wall's roof, not the floor.
+      towers.add(
+        liftFrom(t.pos, 1 + WALL_HEIGHT, TOWER_SCALE),
+        TOWER_SCALE,
+        basisAt(normalOf(t.pos), [0, 1, 0]),
+        1,
+      );
     }
     towers.end();
 
@@ -102,10 +109,17 @@ function normalOf(p: Vec3): Vec3 {
   return [p[0] / l, p[1] / l, p[2] / l];
 }
 
-/** Push a model off the surface by roughly its own radius so it sits ON the
- *  board rather than half-buried in it. */
-function lift(p: Vec3, scale: number): Vec3 {
+/** Push a model off a surface at `base` radius by roughly its own radius, so it
+ *  sits ON that surface rather than half-buried in it. Cell centres all live at
+ *  radius 1 regardless of what is drawn above them, so the base is passed in
+ *  rather than read from the position. */
+function liftFrom(p: Vec3, base: number, scale: number): Vec3 {
   const l = Math.hypot(p[0], p[1], p[2]) || 1;
-  const k = (l + scale * 0.9) / l;
+  const k = (base + scale * 0.9) / l;
   return [p[0] * k, p[1] * k, p[2] * k];
+}
+
+/** Floor-standing units: critters, the tank, the heart. */
+function lift(p: Vec3, scale: number): Vec3 {
+  return liftFrom(p, 1, scale);
 }

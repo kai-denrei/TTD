@@ -22,16 +22,42 @@
 
 import type { SphereMesh } from '../core/sphere/grid.ts';
 import type { Dungeon } from '../core/sphere/dungeon.ts';
-import { BLOCKED, PATH } from '../core/sphere/dungeon.ts';
+import { BLOCKED, PATH, isFrontierWall } from '../core/sphere/dungeon.ts';
 
-/** The PoC's value (td-tab.js:47). Mean chord here is 0.068, so a wall stands
- *  ~0.44 of a cell: enough relief to read, low enough to see over. */
-export const WALL_HEIGHT = 0.03;
+/** Mean chord here is 0.068, so a wall stands ~0.66 of a cell wide.
+ *  The PoC used 0.03; raised after looking at it, because at 0.03 the relief
+ *  vanished from the orbit cameras and the board read as flat colour. Still low
+ *  enough that the chase camera sees over the wall it sits beside. */
+export const WALL_HEIGHT = 0.045;
 
-const C_PATH: readonly [number, number, number] = [0x2b / 255, 0x4a / 255, 0x7a / 255];
-const C_ROOM: readonly [number, number, number] = [0x3f / 255, 0x6e / 255, 0xa8 / 255];
-const C_WALLTOP: readonly [number, number, number] = [0x22 / 255, 0x30 / 255, 0x52 / 255];
-const C_SKIRT: readonly [number, number, number] = [0x10 / 255, 0x1a / 255, 0x2e / 255];
+// Relief has to come from authored colour: the board uses MeshBasicMaterial,
+// so there is no light to shade it. The scheme fakes a single overhead source —
+// wall TOPS catch it, SKIRTS are the shadowed vertical faces, and the floor
+// sits between. Skirts are near-black on purpose: they are what draws the
+// silhouette of every wall run, and a weak top/skirt contrast makes the board
+// read as flat colour from orbit however tall the walls actually are.
+//
+// The floor is also the SATURATED half of the palette and the walls the neutral
+// half. Walls are ~73% of the board, so if both are the same blue the corridors
+// — the only part where anything walks or gets shot — disappear into the mass.
+//
+// EVERY TERRAIN COLOUR STAYS UNDER THE BLOOM THRESHOLD (default 0.5). Bloom is
+// for emissive things: units, and later shots and impacts. Brightening the
+// floor to make corridors pop pushes it over the threshold, at which point the
+// terrain blooms, clips to white, and loses both its colour AND its relief —
+// tried, and it looked worse than the dark version it was meant to fix. So the
+// board is deliberately dim and reads by CONTRAST OF RELIEF rather than by
+// brightness; the only things allowed to glow are the things that matter.
+const C_PATH: readonly [number, number, number] = [0x2c / 255, 0x4c / 255, 0x7c / 255];
+const C_ROOM: readonly [number, number, number] = [0x3a / 255, 0x63 / 255, 0x9c / 255];
+const C_WALLTOP: readonly [number, number, number] = [0x23 / 255, 0x2b / 255, 0x3d / 255];
+// Buildable high ground — a wall that borders open floor. Only ~26% of walls
+// qualify (509 of 1964 on seed 7), and without a cue the other 74% are dead
+// clicks: you tap the rock and nothing happens, with nothing to tell you why.
+// A distinct top tone turns the placement rule into something you can read off
+// the board instead of discovering by trial.
+const C_WALLTOP_BUILD: readonly [number, number, number] = [0x3a / 255, 0x46 / 255, 0x63 / 255];
+const C_SKIRT: readonly [number, number, number] = [0x07 / 255, 0x0b / 255, 0x14 / 255];
 
 export type BoardGeometry = {
   positions: Float32Array;
@@ -91,7 +117,8 @@ export function buildBoardGeometry(
   let wallTris = 0;
   for (let cell = 0; cell < mesh.quads.length; cell++) {
     if (!isWall(cell)) continue;
-    wallTris += face(cell, 1 + h, C_WALLTOP);
+    const buildable = isFrontierWall(mesh, dungeon, cell);
+    wallTris += face(cell, 1 + h, buildable ? C_WALLTOP_BUILD : C_WALLTOP);
   }
 
   // ── 3. skirts ────────────────────────────────────────────────────────────

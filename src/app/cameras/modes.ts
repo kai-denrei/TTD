@@ -131,8 +131,13 @@ export const CAMERA_MODES: readonly CameraMode[] = [
     frame(ctx) {
       const n = norm(ctx.normal);
       const fwd = tangent(n, ctx.heading);
-      const back = 0.16 * ctx.zoom;
-      const rise = 0.075 * ctx.zoom;
+      // Must clear the walls. The board extrudes BLOCKED cells to 0.045, and
+      // at the old rise of 0.075 the camera sat barely above them — any wall
+      // between camera and tank swallowed the tank entirely, which is what
+      // adding walls did to the main driving view. Rise is now ~3x wall height
+      // so the tank stays visible while cornering along a wall run.
+      const back = 0.20 * ctx.zoom;
+      const rise = 0.14 * ctx.zoom;
       return {
         pos: [
           ctx.anchor[0] - fwd[0] * back + n[0] * rise,
@@ -155,10 +160,14 @@ export const CAMERA_MODES: readonly CameraMode[] = [
     frame(ctx) {
       const n = norm(ctx.normal);
       const fwd = tangent(n, ctx.heading);
+      // Eye height sits just above the wall tops (0.045). Lower is more
+      // immersive but you are then driving blind down a trench, which is a
+      // deliberate choice for later — not the default for the mode you use to
+      // check whether the tank is working at all.
       const pos: Vec3 = [
-        ctx.anchor[0] + n[0] * 0.014,
-        ctx.anchor[1] + n[1] * 0.014,
-        ctx.anchor[2] + n[2] * 0.014,
+        ctx.anchor[0] + n[0] * 0.055,
+        ctx.anchor[1] + n[1] * 0.055,
+        ctx.anchor[2] + n[2] * 0.055,
       ];
       return {
         pos,

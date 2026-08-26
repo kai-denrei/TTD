@@ -1,65 +1,38 @@
-// board.ts — the sphere board: one non-indexed mesh plus an edge overlay.
+// board.ts — uploads the board's geometry and owns picking.
 //
-// NON-INDEXED ON PURPOSE. Vertices are shared between adjacent quads, so a
-// per-vertex colour bleeds one cell's dungeon tag into its neighbours and the
-// board turns to mush. Duplicating vertices per face gives every cell a flat,
-// exact colour. ~2,700 quads -> ~16,200 verts, which is nothing.
-//
-// THE EDGE OVERLAY IS NOT DECORATION. Tower placement is per-cell, so a player
-// who cannot see where one cell ends cannot aim. Edges are deduplicated by
-// sorted vertex-index key so shared borders are drawn once.
+// The extrusion itself is pure and Node-tested in render/geometry.ts; this file
+// is the thin three.js half. The edge overlay stays opted out of raycasting —
+// it sits fractionally in front of the surface, so a recursive raycast hits it
+// first and returns an intersection with no faceIndex, silently swallowing
+// every tower placement. That was the M0b bug, and it is the reason the rule
+// lives here beside cellFromFaceIndex rather than as a filter each caller has
+// to remember.
 
 import * as THREE from 'three';
 import type { SphereMesh } from '../core/sphere/grid.ts';
 import type { Dungeon } from '../core/sphere/dungeon.ts';
-import { BLOCKED, PATH } from '../core/sphere/dungeon.ts';
+import { BLOCKED } from '../core/sphere/dungeon.ts';
+import { buildBoardGeometry, WALL_HEIGHT } from './geometry.ts';
 
-const COLOR_BLOCKED = new THREE.Color(0x141b2c);
-const COLOR_PATH = new THREE.Color(0x2b4a7a);
-const COLOR_ROOM = new THREE.Color(0x3f6ea8);
+export { WALL_HEIGHT };
+
 const COLOR_EDGE = new THREE.Color(0x0a0f1a);
 
-/** faceIndex -> cell index, filled while triangles are emitted. Raycast tower
- *  placement resolves a hit face to the cell it belongs to. This is the only
- *  place that mapping is available for free. */
 let faceToCell: Int32Array = new Int32Array(0);
 
+/** Resolve a raycast hit to the cell it belongs to. Covers floor, wall tops
+ *  and skirts, so clicking the visible side of a wall selects that wall. */
 export function cellFromFaceIndex(faceIndex: number): number {
   return faceToCell[faceIndex] ?? -1;
 }
 
 export function makeBoard(mesh: SphereMesh, dungeon: Dungeon): THREE.Group {
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const faces: number[] = [];
-
-  for (let cell = 0; cell < mesh.quads.length; cell++) {
-    const quad = mesh.quads[cell];
-    if (quad === undefined || quad.length < 3) continue;
-
-    const tag = dungeon.tags[cell];
-    const c = tag === BLOCKED ? COLOR_BLOCKED : tag === PATH ? COLOR_PATH : COLOR_ROOM;
-
-    // Fan-triangulate: generic over polygon size, because the mesh pipeline
-    // merges cells and a stray 5-gon must not throw.
-    for (let i = 1; i + 1 < quad.length; i++) {
-      const a = mesh.verts[quad[0]!];
-      const b = mesh.verts[quad[i]!];
-      const d = mesh.verts[quad[i + 1]!];
-      if (a === undefined || b === undefined || d === undefined) continue;
-      for (const v of [a, b, d]) {
-        positions.push(v[0], v[1], v[2]);
-        colors.push(c.r, c.g, c.b);
-      }
-      faces.push(cell);
-    }
-  }
-
-  faceToCell = Int32Array.from(faces);
+  const built = buildBoardGeometry(mesh, dungeon);
+  faceToCell = built.faceCell;
 
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.setAttribute('position', new THREE.BufferAttribute(built.positions, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(built.colors, 3));
   geo.computeVertexNormals();
 
   const surface = new THREE.Mesh(
@@ -71,15 +44,21 @@ export function makeBoard(mesh: SphereMesh, dungeon: Dungeon): THREE.Group {
   const group = new THREE.Group();
   group.name = 'board';
   group.add(surface);
-  group.add(makeEdges(mesh));
+  group.add(makeEdges(mesh, dungeon));
   return group;
 }
 
-function makeEdges(mesh: SphereMesh): THREE.LineSegments {
+/** Cell outlines on the walkable floor only. Outlining wall tops as well turns
+ *  a board that is ~73% wall into a wireframe and buries the corridors — which
+ *  are the part you actually need to read, since that is where enemies walk
+ *  and where a tower's field of fire matters. */
+function makeEdges(mesh: SphereMesh, dungeon: Dungeon): THREE.LineSegments {
   const seen = new Set<number>();
   const pts: number[] = [];
-  for (const quad of mesh.quads) {
+  for (let cell = 0; cell < mesh.quads.length; cell++) {
+    const quad = mesh.quads[cell];
     if (quad === undefined) continue;
+    if (dungeon.tags[cell] === BLOCKED) continue;
     for (let i = 0; i < quad.length; i++) {
       const a = quad[i]!;
       const b = quad[(i + 1) % quad.length]!;
@@ -96,12 +75,6 @@ function makeEdges(mesh: SphereMesh): THREE.LineSegments {
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
   const lines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: COLOR_EDGE }));
   lines.name = 'board-edges';
-  // NEVER a pick target. The overlay is a visual aid for reading cell
-  // boundaries, but it sits fractionally in front of the surface, so a
-  // recursive raycast hits it first and returns an intersection with no
-  // faceIndex — silently swallowing every tower placement. Opting out of
-  // raycasting here keeps that rule beside cellFromFaceIndex rather than
-  // leaving it as a filter every caller has to remember.
   lines.raycast = () => {};
   return lines;
 }
