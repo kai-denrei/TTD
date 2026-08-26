@@ -105,7 +105,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
   let nextCritterId = 0;
 
   // Pending spawns queued by wave engine callbacks
-  const pendingSpawns: number[] = []; // gate cell indices
+  const pendingSpawns: Array<{ gate: number; hp: number }> = [];
 
   // ── Towers & tank ────────────────────────────────────────────────────────
   const towers: Tower[] = [];
@@ -139,7 +139,7 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     const stateBefore = waves.state;
     waves.tick(dt, {
       enemiesAlive: critters.filter((c) => c.alive).length,
-      onSpawn: (gate: number) => { pendingSpawns.push(gate); },
+      onSpawn: (gate: number, hp: number) => { pendingSpawns.push({ gate, hp }); },
     });
     // Wave-clear timing. The engine enters 'breathing' exactly when the field
     // has drained to its overlap threshold — that transition IS the wave being
@@ -153,14 +153,14 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
     }
 
     // ── 3. Spawn pending critters ────────────────────────────────────────────
-    for (const gate of pendingSpawns) {
-      const c = spawnCritter(nextCritterId++, gate, tuning, crittersRng, elapsed);
+    for (const { gate, hp } of pendingSpawns) {
+      const c = spawnCritter(nextCritterId++, gate, tuning, crittersRng, elapsed, hp);
       // Initialize position from mesh
       const gatePos: Vec3 = mesh.centers[gate] ?? [0, 1, 0];
       c.pos = gatePos;
       critters.push(c);
     }
-    pendingSpawns.length = 0;
+    pendingSpawns.splice(0);
 
     // ── 4. Step critters ─────────────────────────────────────────────────────
     const arrivedIds = new Set<number>();
@@ -217,7 +217,29 @@ export function makeWorld(opts: { seed: number; tuning: TuningStore }): World {
       }
     }
 
-    // 7d. Wave clear detection (check if wave is now fully clear after deaths)
+    // 7d. Contact damage to tank (critters that reach the tank's position)
+    const TANK_CONTACT_RADIUS = 0.05;
+    for (const c of critters) {
+      if (!c.alive) continue;
+      const dx = c.pos[0] - tank.pos[0];
+      const dy = c.pos[1] - tank.pos[1];
+      const dz = c.pos[2] - tank.pos[2];
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (d <= TANK_CONTACT_RADIUS) {
+        // Record hit in telemetry regardless of god mode
+        telemetry.tankHit();
+        tank.hits += 1;
+        if (!tuning.flag('god.tankInvulnerable')) {
+          tank.hp -= 1;
+          if (tank.hp < 0) tank.hp = 0;
+        }
+        // Kill the critter that rammed the tank (they die on impact)
+        c.alive = false;
+        telemetry.kill('player', elapsed - c.bornAt);
+      }
+    }
+
+    // 7e. Wave clear detection (check if wave is now fully clear after deaths)
     // (Wave engine handles this internally via enemiesAlive count)
 
     // ── 8. Telemetry tick ────────────────────────────────────────────────────

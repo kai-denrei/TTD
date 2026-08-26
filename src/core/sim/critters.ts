@@ -104,8 +104,9 @@ export function spawnCritter(
   tuning: TuningStore,
   rng: Rng,
   now: number,
+  hpOverride?: number,
 ): Critter {
-  const hp = tuning.get('enemy.hp');
+  const hp = hpOverride !== undefined ? hpOverride : tuning.get('enemy.hp');
   // Pick initial next: best downhill neighbor of spawn cell.
   // If none (spawn IS heart, unusual but possible), use spawn.
   // We don't need rng for the initial next because bestNeighbor is deterministic.

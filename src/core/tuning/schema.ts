@@ -136,8 +136,8 @@ export const LEVERS: readonly Lever[] = [
     key: 'tower.range',
     group: 'player',
     label: 'Tower range',
-    min: 1, max: 20, step: 0.5, value: 6,
-    help: 'Tower targeting radius in grid cells. Nearest-target within this range.',
+    min: 0.05, max: 0.6, step: 0.025, value: 0.25,
+    help: 'Tower targeting radius in world chord distance. Typical cell spacing ~0.15; 0.25 covers ~2 cells.',
   },
   {
     key: 'tower.rate',
@@ -166,6 +166,13 @@ export const LEVERS: readonly Lever[] = [
     label: 'Tank fire rate (s)',
     min: 0.1, max: 3.0, step: 0.1, value: 0.5,
     help: 'Seconds between tank shots. Lower = faster.',
+  },
+  {
+    key: 'tank.range',
+    group: 'player',
+    label: 'Tank range',
+    min: 0.05, max: 0.6, step: 0.025, value: 0.25,
+    help: 'Tank shot range in world chord distance. Typical cell spacing ~0.15; 0.25 covers ~2 cells.',
   },
 
   // ── feel ───────────────────────────────────────────────────────────────────

@@ -102,8 +102,8 @@ export function stepTank(
 
   const events: TankDamageEvent[] = [];
   if (input.fire && tank.cooldown <= 0) {
-    // Fire at nearest alive critter in heading half-space within range
-    const fireRange = 3; // fixed geometric range for tank shots (not a lever in M0)
+    // Fire at nearest alive critter within range (live lever: tank.range)
+    const fireRange = tuning.get('tank.range');
     let target: Critter | null = null;
     let bestDist = Infinity;
     for (const c of critters) {

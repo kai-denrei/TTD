@@ -18,12 +18,12 @@
 //    breathing → spawning  : gap timer expired; advance wave number, new plan
 //
 //  Overlap threshold:
-//    threshold = (1 - overlap) * count
-//    overlap=0 → threshold=count → wait until enemiesAlive <= count (i.e. all
-//      of this wave's enemies are dead — but since we track spawned count and
-//      external kills, we check enemiesAlive <= 0)
-//    overlap=1 → threshold=0    → triggered as soon as spawning finishes
-//    intermediate → triggers once enemiesAlive <= (1-overlap)*count
+//    threshold = overlap * count
+//    overlap=0 → threshold=0 → wait until enemiesAlive <= 0 (full clear required)
+//    overlap=1 → threshold=count → enemiesAlive <= count always true once spawning
+//      starts → next wave triggers immediately (never waits)
+//    intermediate → triggers once enemiesAlive <= overlap*count
+//    e.g. overlap=0.75, count=10 → threshold=7.5 → next wave when 25% have died
 //
 //  Live reads: dripRate, dripJitter, overlap, gap, size, sizeGrowth, hpGrowth,
 //    and enemy.hp are all read from the store at plan/tick time — never captured.
@@ -38,7 +38,7 @@ export type WaveState = 'idle' | 'spawning' | 'engaged' | 'breathing';
 export type WaveEngine = {
   state: WaveState;
   wave: number;
-  tick(dt: number, ctx: { enemiesAlive: number; onSpawn: (gate: number) => void }): void;
+  tick(dt: number, ctx: { enemiesAlive: number; onSpawn: (gate: number, hp: number) => void }): void;
   plan(): WavePlan | null;
   timeToNext(): number;
 };
@@ -106,7 +106,7 @@ export function makeWaveEngine(tuning: TuningStore, rng: Rng, gates: number[]): 
   // Kick off wave 1 immediately
   startNextWave();
 
-  function tick(dt: number, ctx: { enemiesAlive: number; onSpawn: (gate: number) => void }): void {
+  function tick(dt: number, ctx: { enemiesAlive: number; onSpawn: (gate: number, hp: number) => void }): void {
     if (state === 'idle') return;
 
     if (state === 'spawning') {
@@ -116,7 +116,7 @@ export function makeWaveEngine(tuning: TuningStore, rng: Rng, gates: number[]): 
       while (spawnCursor < plan.events.length) {
         const evt = plan.events[spawnCursor]!;
         if (waveTime >= evt.at) {
-          ctx.onSpawn(evt.gate);
+          ctx.onSpawn(evt.gate, plan.hp);
           spawnCursor++;
         } else {
           break;
@@ -138,13 +138,12 @@ export function makeWaveEngine(tuning: TuningStore, rng: Rng, gates: number[]): 
 
     if (state === 'engaged') {
       // Check overlap condition.
-      // overlap=0: full clear required (0 enemies alive).
-      // overlap=1: this branch is never reached — spawning→breathing directly.
-      // in between: (1-overlap)*count.
+      // threshold = overlap * count
+      // overlap=0 → 0 (full clear); overlap=1 → count (always triggers, handled
+      // via spawning→breathing shortcut above); intermediate → fraction of wave.
       const plan = currentPlan!;
       const overlap = tuning.get('wave.overlap');
-      // overlap=0: full clear (0 alive); 0<overlap<1: (1-overlap)*count; overlap>=1: handled in spawning
-      const threshold = overlap <= 0 ? 0 : (1 - overlap) * plan.count;
+      const threshold = overlap * plan.count;
       if (ctx.enemiesAlive <= threshold) {
         // Transition to breathing
         breathTimer = tuning.get('wave.gap');

@@ -66,6 +66,18 @@ describe('waves', () => {
     assert.ok(e.wave > 1, 'never advanced despite overlap=1');
   });
 
+  test('overlap 0.25 waits longer than overlap 0.75', () => {
+    // With same conditions, higher overlap = more waves completed
+    const run = (ov: number) => {
+      const t = makeTuning();
+      t.set('wave.size', 10); t.set('wave.dripRate', 0.1); t.set('wave.overlap', ov); t.set('wave.gap', 0);
+      const e = makeWaveEngine(t, stream(1, 'w'), [0]);
+      for (let i = 0; i < 2000; i++) e.tick(0.1, { enemiesAlive: 5, onSpawn: () => {} });
+      return e.wave;
+    };
+    assert.ok(run(0.75) >= run(0.25), 'overlap=0.75 should complete >=waves vs overlap=0.25');
+  });
+
   test('the engine emits exactly count spawns per wave', () => {
     const t = makeTuning();
     t.set('wave.size', 7); t.set('wave.dripRate', 0.2); t.set('wave.overlap', 0); t.set('wave.gap', 1);

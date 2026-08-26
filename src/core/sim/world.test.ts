@@ -27,7 +27,7 @@ test('REPLAY DETERMINISM: same seed + preset + input => identical telemetry', ()
 
 test('towers kill critters and it is attributed to the tower', () => {
   const t = makeTuning();
-  t.set('tower.damage', 100); t.set('tower.range', 5); t.set('tower.rate', 10); t.set('enemy.speed', 2);
+  t.set('tower.damage', 100); t.set('tower.range', 0.5); t.set('tower.rate', 10); t.set('enemy.speed', 2);
   const w = makeWorld({ seed: 1, tuning: t });
   w.placeTower(w.dungeon.spawn);
   scripted(w, 3000);
